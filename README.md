@@ -73,12 +73,39 @@ Everything the build produces stays inside this directory, in `yocto-builds/`
 Override any setting from `config.sh` with environment variables, for example:
 
 ```bash
-DOCKER_WORKDIR=/data/yocto DOCKER_CPUSET= DOCKER_MEMORY= ./docker-run.sh
+DOCKER_WORKDIR=/data/yocto ./docker-run.sh
 ```
 
 Output images: `images/` in this directory. It is a link to
 `yocto-builds/build_imx95-15x15-lpddr4x-frdm/tmp/deploy/images/imx95-15x15-lpddr4x-frdm/`,
 created after each successful build.
+
+## CPU and memory
+
+The build uses all 24 cores and at most 24 GB of RAM. These limits are set in
+`config.sh`:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `DOCKER_CPUSET` | empty | Cores the container may use, e.g. `0-8,10-23`. Empty = all cores |
+| `DOCKER_MEMORY` | `24g` | Maximum RAM for the container (no swap). Empty = no limit |
+| `BB_NUMBER_THREADS` | `24` | How many BitBake tasks run at the same time |
+| `PARALLEL_MAKE_JOBS` | `24` | `make -j` value inside each task |
+
+`DOCKER_CPUSET` and `DOCKER_MEMORY` are limits Docker puts on the container.
+`BB_NUMBER_THREADS` and `PARALLEL_MAKE_JOBS` decide how much work BitBake
+starts inside it, so they set how many cores are actually used.
+
+Override them for one build without editing the file:
+
+```bash
+BB_NUMBER_THREADS=12 DOCKER_MEMORY=16g ./docker-run.sh
+```
+
+If the build fails with `Killed` or exit code `137`, the container ran out of
+memory: lower `BB_NUMBER_THREADS` (e.g. to 12) and rerun with
+`SKIP_SYNC=1 ./docker-run.sh`. Finished tasks are cached, so it continues
+where it stopped. Watch usage with `docker stats` while it builds.
 
 ## Flash to SD card
 

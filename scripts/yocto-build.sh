@@ -35,11 +35,15 @@ else
 fi
 
 # Set up (or re-enter) the build directory; both scripts cd into it.
+# setup-environment unsets MACHINE and DISTRO, so keep a copy.
+EPP_MACHINE="${MACHINE}"
+EPP_DISTRO="${DISTRO}"
 if [ -f "${BUILD_DIR_NAME}/conf/local.conf" ]; then
     source setup-environment "${BUILD_DIR_NAME}"
 else
     EULA=1 MACHINE="${MACHINE}" DISTRO="${DISTRO}" source imx-setup-release.sh -b "${BUILD_DIR_NAME}"
 fi
+export MACHINE="${EPP_MACHINE}" DISTRO="${EPP_DISTRO}"
 
 # Add meta-epp-v2 (idempotent)
 LAYER_PATH="${EPP_DIR}/meta-epp-v2"
@@ -68,6 +72,9 @@ DISTRO = "${DISTRO}"
 
 DL_DIR = "${DL_DIR}"
 SSTATE_DIR = "${SSTATE_DIR}"
+# Keep the hash equivalence database next to the sstate cache, so the cache
+# stays reusable when the build directory is deleted
+BB_HASHSERVE_DB_DIR = "${SSTATE_DIR}"
 
 BB_NUMBER_THREADS = "${BB_NUMBER_THREADS}"
 PARALLEL_MAKE = "-j ${PARALLEL_MAKE_JOBS}"

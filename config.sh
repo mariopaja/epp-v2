@@ -30,8 +30,8 @@ export TAG="${TAG:-epp-v2-builder:imx-${VERSION}}"
 # Container resource limits (leave empty for no limit).
 # DOCKER_CPUSET restricts the container to some cores, e.g. "0-8,10-23".
 export DOCKER_CPUSET="${DOCKER_CPUSET-}"
-export DOCKER_MEMORY="${DOCKER_MEMORY-20g}"
+export DOCKER_MEMORY="${DOCKER_MEMORY-24g}"
 
-# BitBake parallelism inside the container
-export BB_NUMBER_THREADS="${BB_NUMBER_THREADS:-4}"
-export PARALLEL_MAKE_JOBS="${PARALLEL_MAKE_JOBS:-5}"
+# BitBake parallelism inside the container (24 = all cores on this host)
+export BB_NUMBER_THREADS="${BB_NUMBER_THREADS:-24}"
+export PARALLEL_MAKE_JOBS="${PARALLEL_MAKE_JOBS:-24}"
