@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Example overlay for an external module. Copy this file, add it to
+ * SRC_URI in epp-v2-overlays.bb and list the resulting .dtbo in
+ * EPP_OVERLAYS (board.conf).
+ *
+ * Board nodes can be referenced by label because the base FRDM-IMX95 DTB is
+ * built with symbols, e.g.:
+ *
+ *   &lpi2c3 {
+ *       status = "okay";
+ *       temp-sensor@48 {
+ *           compatible = "ti,tmp102";
+ *           reg = <0x48>;
+ *       };
+ *   };
+ */
+
+/dts-v1/;
+/plugin/;
+
+&{/} {
+    epp-v2-example {
+        compatible = "epp,example";
+        status = "disabled";
+    };
+};

@@ -1,17 +1,134 @@
-# epp-v2 Yocto custom config
+# epp-v2
 
-Custom layer + config for the epp-v2 FRDM-IMX95 build.
+Docker-based Yocto build for the **epp-v2** board, based on the
+**NXP FRDM-IMX95 (i.MX 95 15x15, LPDDR4x)**. It is derived from
+[nxp-imx/imx-docker](https://github.com/nxp-imx/imx-docker), and also contains the
+board's custom layer `meta-epp-v2` and its configuration (hostname, root
+password, device tree overlays).
 
-- hostname: `epp-v2`
-- root password: `root1234`
-- SSH enabled with password root login
+The image is always built **inside the Docker container**. The host only needs
+Docker.
 
-## Usage
+| | |
+|---|---|
+| BSP release | i.MX `6.18.20-2.0.0` (Yocto wrynose) |
+| `MACHINE` | `imx95-15x15-lpddr4x-frdm` |
+| `DISTRO` | `fsl-imx-wayland` |
+| Image | `epp-v2-image` (core-image-minimal + SSH + kernel modules) |
 
-After `repo sync` + `imx-setup-release.sh` (or `oe-init-build-env` on an
-existing build dir), with the environment sourced:
+## Layout
+
+```
+epp-v2/
+├── config.sh             # Host/Docker settings: BSP version, machine, paths, CPU/RAM limits
+├── board.conf            # Board settings: hostname, root password, overlays, extra packages
+├── Dockerfile            # Ubuntu 24.04 build environment
+├── docker-build.sh       # Builds the Docker image
+├── docker-run.sh         # Runs the build (or a shell) in the container
+├── images -> yocto-builds/.../deploy/images/...   # created by the build (gitignored)
+├── yocto-builds/         # BSP sources, build dir, caches (gitignored)
+├── scripts/
+│   └── yocto-build.sh    # Runs inside the container: repo sync, setup, bitbake
+└── meta-epp-v2/          # Custom Yocto layer
+    ├── conf/layer.conf
+    ├── recipes-core/images/epp-v2-image.bb
+    ├── recipes-core/base-files/          # hostname
+    ├── recipes-connectivity/openssh/     # root SSH login
+    ├── recipes-kernel/linux/             # kernel config fragment (epp-v2.cfg)
+    └── recipes-bsp/
+        ├── epp-v2-overlays/              # device tree overlays (*.dtso)
+        └── epp-v2-bootscript/            # U-Boot boot.scr that applies overlays
+```
+
+## Prerequisites
+
+Docker, with your user in the `docker` group
+(see the [imx-docker README](https://github.com/nxp-imx/imx-docker#prerequisites),
+including the proxy setup if needed). Around 300 GB of free disk space.
+
+## Build
 
 ```bash
-~/epp-v2-yocto-config/apply-config.sh <path-to-build-dir>
-bitbake core-image-minimal
+./docker-build.sh     # once, builds the container image
+./docker-run.sh       # repo sync + bitbake epp-v2-image, inside the container
 ```
+
+Rebuild without re-syncing the BSP sources:
+
+```bash
+SKIP_SYNC=1 ./docker-run.sh
+```
+
+Get a shell inside the container (for example to run `bitbake` by hand):
+
+```bash
+./docker-run.sh bash
+# inside the container:
+cd yocto-builds && source setup-environment build_imx95-15x15-lpddr4x-frdm
+bitbake epp-v2-image
+```
+
+Everything the build produces stays inside this directory, in `yocto-builds/`
+(BSP sources, build dir, `downloads/` and `sstate-cache/`). It is gitignored.
+Override any setting from `config.sh` with environment variables, for example:
+
+```bash
+DOCKER_WORKDIR=/data/yocto DOCKER_CPUSET= DOCKER_MEMORY= ./docker-run.sh
+```
+
+Output images: `images/` in this directory. It is a link to
+`yocto-builds/build_imx95-15x15-lpddr4x-frdm/tmp/deploy/images/imx95-15x15-lpddr4x-frdm/`,
+created after each successful build.
+
+## Flash to SD card
+
+```bash
+cd images
+sudo bmaptool copy epp-v2-image-imx95-15x15-lpddr4x-frdm.rootfs.wic.zst /dev/sdX
+```
+
+## Board configuration (`board.conf`)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `EPP_HOSTNAME` | `epp-v2` | Device hostname |
+| `EPP_ROOT_PASSWORD` | `root1234` | Root password. Hashed with SHA-512 at build time |
+| `EPP_SSH_ROOT_LOGIN` | `yes` | Allow root login over SSH with password |
+| `EPP_OVERLAYS` | empty | `.dtbo` files U-Boot applies at boot |
+| `EPP_FDTFILE` | `imx95-15x15-frdm.dtb` | Base device tree |
+| `EPP_EXTRA_PACKAGES` | empty | Extra packages installed in the image |
+
+`scripts/yocto-build.sh` turns these into `conf/auto.conf` in the build
+directory on every build. Edit `board.conf`, not `auto.conf`.
+
+**Change the default root password before deploying a device.**
+
+## Adding an external module
+
+1. **Device tree overlay**: create
+   `meta-epp-v2/recipes-bsp/epp-v2-overlays/files/<name>.dtso` (see
+   `epp-example.dtso`). Board nodes can be referenced by label (`&lpi2c3`,
+   ...) because the FRDM DTB is built with symbols. Add it to `SRC_URI` in
+   `epp-v2-overlays.bb`.
+2. **Enable it**: add `<name>.dtbo` to `EPP_OVERLAYS` in `board.conf`.
+3. **Kernel driver**: if the driver is not in `imx_v8_defconfig`, add it to
+   `meta-epp-v2/recipes-kernel/linux/files/epp-v2.cfg` (for example
+   `CONFIG_SENSORS_TMP102=m`).
+4. Rebuild: `SKIP_SYNC=1 ./docker-run.sh`.
+
+### How overlays are applied
+
+The overlays are copied to `overlays/` on the FAT boot partition (mounted at
+`/boot` on the target), together with `boot.scr`. U-Boot runs `boot.scr`,
+which loads `Image` and the base DTB, applies each overlay from `epp_overlays`
+and boots. If the script fails, U-Boot falls back to the default NXP boot.
+
+You can change the overlays without rebuilding, from the U-Boot prompt:
+
+```
+setenv epp_overlays "epp-example.dtbo my-sensor.dtbo"
+saveenv
+boot
+```
+
+or by copying a new `.dtbo` to `/boot/overlays/` on the running board.

@@ -1,0 +1,5 @@
+.git
+yocto-builds
+images
+*.log
+meta-epp-v2

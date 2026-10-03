@@ -1,0 +1,49 @@
+# epp-v2 U-Boot boot script (compiled to boot.scr).
+# Loads the kernel and base DTB from the boot partition, applies the device
+# tree overlays from overlays/ and boots. If anything fails, the script
+# returns and U-Boot falls back to its default BSP boot command.
+#
+# Override at the U-Boot prompt (then 'saveenv'):
+#   setenv epp_overlays "foo.dtbo bar.dtbo"
+#   setenv epp_fdtfile imx95-15x15-frdm.dtb
+
+echo "epp-v2: boot script"
+
+# bootstd sets devtype/devnum/distro_bootpart; fall back to the BSP env.
+if test -n "${devtype}"; then
+    setenv epp_devtype ${devtype}
+    setenv epp_devpart ${devnum}:${distro_bootpart}
+else
+    setenv epp_devtype mmc
+    setenv epp_devpart ${mmcdev}:${mmcpart}
+fi
+
+if test -z "${epp_overlays}"; then
+    setenv epp_overlays "@@EPP_OVERLAYS@@"
+fi
+if test -z "${epp_fdtfile}"; then
+    setenv epp_fdtfile "@@EPP_FDTFILE@@"
+fi
+if test -z "${fdtoverlay_addr_r}"; then
+    setenv fdtoverlay_addr_r 0x93200000
+fi
+
+run mmcargs
+
+if load ${epp_devtype} ${epp_devpart} ${loadaddr} ${image}; then
+    if load ${epp_devtype} ${epp_devpart} ${fdt_addr_r} ${epp_fdtfile}; then
+        fdt addr ${fdt_addr_r}
+        fdt resize 0x20000
+        for ov in ${epp_overlays}; do
+            echo "epp-v2: applying overlay ${ov}"
+            if load ${epp_devtype} ${epp_devpart} ${fdtoverlay_addr_r} overlays/${ov}; then
+                fdt apply ${fdtoverlay_addr_r}
+            else
+                echo "epp-v2: WARNING overlay ${ov} not found"
+            fi
+        done
+        booti ${loadaddr} - ${fdt_addr_r}
+    fi
+fi
+
+echo "epp-v2: boot script failed, falling back to default boot"
