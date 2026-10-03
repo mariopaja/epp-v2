@@ -33,3 +33,4 @@ do_image_wic[depends] += " \
     epp-v2-bootscript:do_deploy \
     epp-v2-overlays:do_deploy \
 "
+IMAGE_ROOTFS_EXTRA_SPACE = "4194304"
