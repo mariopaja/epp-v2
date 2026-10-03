@@ -37,7 +37,7 @@ if [ -t 0 ] && [ -t 1 ]; then
 fi
 
 [ -n "${DOCKER_CPUSET}" ] && DOCKER_ARGS+=(--cpuset-cpus="${DOCKER_CPUSET}")
-[ -n "${DOCKER_MEMORY}" ] && DOCKER_ARGS+=(--memory="${DOCKER_MEMORY}" --memory-swap="${DOCKER_MEMORY}")
+[ -n "${DOCKER_MEMORY}" ] && DOCKER_ARGS+=(--memory="${DOCKER_MEMORY}" --memory-swap="${DOCKER_MEMORY_SWAP:-${DOCKER_MEMORY}}")
 
 [ -d "${HOME}/.ssh" ] && DOCKER_ARGS+=(--volume "${HOME}/.ssh:${HOME}/.ssh:ro")
 [ -f "${HOME}/.gitconfig" ] && DOCKER_ARGS+=(--volume "${HOME}/.gitconfig:${HOME}/.gitconfig:ro")
@@ -48,4 +48,15 @@ for var in EPP_DIR VERSION BRANCH MANIFEST REMOTE MACHINE DISTRO IMAGES \
     DOCKER_ARGS+=(--env "${var}=${!var}")
 done
 
-exec docker run "${DOCKER_ARGS[@]}" "${TAG}" "$@"
+START=$(date +%s)
+set +e
+docker run "${DOCKER_ARGS[@]}" "${TAG}" "$@"
+RC=$?
+END=$(date +%s)
+
+D=$((END - START))
+echo ""
+echo "Started:  $(date -d @"${START}" '+%F %T')"
+echo "Finished: $(date -d @"${END}" '+%F %T')"
+printf 'Duration: %dh %02dm %02ds (exit code %d)\n' $((D / 3600)) $((D % 3600 / 60)) $((D % 60)) "${RC}"
+exit "${RC}"

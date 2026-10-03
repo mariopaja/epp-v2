@@ -31,7 +31,11 @@ export TAG="${TAG:-epp-v2-builder:imx-${VERSION}}"
 # DOCKER_CPUSET restricts the container to some cores, e.g. "0-8,10-23".
 export DOCKER_CPUSET="${DOCKER_CPUSET-}"
 export DOCKER_MEMORY="${DOCKER_MEMORY-24g}"
+# RAM + swap the container may use in total: 24 GB RAM + 8 GB swap, so short
+# memory spikes slow the build down instead of killing it
+export DOCKER_MEMORY_SWAP="${DOCKER_MEMORY_SWAP-32g}"
 
-# BitBake parallelism inside the container (24 = all cores on this host)
-export BB_NUMBER_THREADS="${BB_NUMBER_THREADS:-24}"
-export PARALLEL_MAKE_JOBS="${PARALLEL_MAKE_JOBS:-24}"
+# BitBake parallelism inside the container. 8 tasks x 12 jobs keeps all 24
+# cores busy within 24 GB; 24 x 24 ran out of memory (C++ compiles ~2 GB each).
+export BB_NUMBER_THREADS="${BB_NUMBER_THREADS:-8}"
+export PARALLEL_MAKE_JOBS="${PARALLEL_MAKE_JOBS:-12}"

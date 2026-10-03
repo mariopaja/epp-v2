@@ -14,17 +14,19 @@ Docker.
 | BSP release | i.MX `6.18.20-2.0.0` (Yocto wrynose) |
 | `MACHINE` | `imx95-15x15-lpddr4x-frdm` |
 | `DISTRO` | `fsl-imx-wayland` |
-| Image | `epp-v2-image` (core-image-minimal + SSH + kernel modules) |
+| Image | `epp-v2-image` (core-image-minimal + SSH + kernel modules), see [PACKAGES.md](PACKAGES.md) |
 
 ## Layout
 
 ```
 epp-v2/
 ├── config.sh             # Host/Docker settings: BSP version, machine, paths, CPU/RAM limits
+├── PACKAGES.md           # List of packages in the default image
 ├── board.conf            # Board settings: hostname, root password, overlays, extra packages
 ├── Dockerfile            # Ubuntu 24.04 build environment
 ├── docker-build.sh       # Builds the Docker image
 ├── docker-run.sh         # Runs the build (or a shell) in the container
+├── flash-sd.sh           # Writes the image to an SD card
 ├── images -> yocto-builds/.../deploy/images/...   # created by the build (gitignored)
 ├── yocto-builds/         # BSP sources, build dir, caches (gitignored)
 ├── scripts/
@@ -52,6 +54,9 @@ including the proxy setup if needed). Around 300 GB of free disk space.
 ./docker-build.sh     # once, builds the container image
 ./docker-run.sh       # repo sync + bitbake epp-v2-image, inside the container
 ```
+
+When it finishes, `docker-run.sh` prints the start and end time and how long
+the build took.
 
 Rebuild without re-syncing the BSP sources:
 
@@ -82,19 +87,22 @@ created after each successful build.
 
 ## CPU and memory
 
-The build uses all 24 cores and at most 24 GB of RAM. These limits are set in
+The build uses all 24 cores, at most 24 GB of RAM and up to 8 GB of swap. These limits are set in
 `config.sh`:
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `DOCKER_CPUSET` | empty | Cores the container may use, e.g. `0-8,10-23`. Empty = all cores |
-| `DOCKER_MEMORY` | `24g` | Maximum RAM for the container (no swap). Empty = no limit |
-| `BB_NUMBER_THREADS` | `24` | How many BitBake tasks run at the same time |
-| `PARALLEL_MAKE_JOBS` | `24` | `make -j` value inside each task |
+| `DOCKER_MEMORY` | `24g` | Maximum RAM for the container. Empty = no limit |
+| `DOCKER_MEMORY_SWAP` | `32g` | RAM + swap in total, i.e. up to 8 GB of swap on top of the 24 GB RAM |
+| `BB_NUMBER_THREADS` | `8` | How many BitBake tasks run at the same time |
+| `PARALLEL_MAKE_JOBS` | `12` | `make -j` value inside each task |
 
 `DOCKER_CPUSET` and `DOCKER_MEMORY` are limits Docker puts on the container.
 `BB_NUMBER_THREADS` and `PARALLEL_MAKE_JOBS` decide how much work BitBake
-starts inside it, so they set how many cores are actually used.
+starts inside it, so they set how many cores are actually used. Up to
+tasks × jobs compilers can run at once, and a C++ compile can take ~2 GB, so
+24 × 24 runs out of 24 GB; 8 × 12 keeps the cores busy without that.
 
 Override them for one build without editing the file:
 
@@ -103,15 +111,27 @@ BB_NUMBER_THREADS=12 DOCKER_MEMORY=16g ./docker-run.sh
 ```
 
 If the build fails with `Killed` or exit code `137`, the container ran out of
-memory: lower `BB_NUMBER_THREADS` (e.g. to 12) and rerun with
+memory (check with `journalctl -k | grep -i oom`): lower `BB_NUMBER_THREADS` (e.g. to 6) and rerun with
 `SKIP_SYNC=1 ./docker-run.sh`. Finished tasks are cached, so it continues
 where it stopped. Watch usage with `docker stats` while it builds.
 
 ## Flash to SD card
 
 ```bash
-cd images
-sudo bmaptool copy epp-v2-image-imx95-15x15-lpddr4x-frdm.rootfs.wic.zst /dev/sdX
+./flash-sd.sh            # flash the latest image from images/
+./flash-sd.sh --list     # only show the SD cards / USB disks found
+```
+
+The script lists removable, USB and SD-reader disks with their size, model
+and partitions (internal disks and the disk running the system are never
+shown), asks which one to use, and asks you to type the device name to
+confirm. It then unmounts the card and writes the image with `bmaptool`
+(or `dd` if no `.bmap` file is found). It needs `sudo`.
+
+Manual alternative (replace `/dev/sdX`, check with `lsblk` first):
+
+```bash
+sudo bmaptool copy images/epp-v2-image-imx95-15x15-lpddr4x-frdm.rootfs.wic.zst /dev/sdX
 ```
 
 ## Board configuration (`board.conf`)

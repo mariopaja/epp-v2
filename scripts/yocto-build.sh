@@ -83,6 +83,9 @@ GNU_MIRROR = "https://ftp.gnu.org/gnu"
 
 PACKAGE_CLASSES = "package_deb"
 
+# epp-v2 distro policy (meta-epp-v2/conf/epp-v2.conf)
+require conf/epp-v2.conf
+
 # Board settings
 EPP_HOSTNAME = "${EPP_HOSTNAME}"
 EPP_ROOT_PASSWORD_HASH = "${ROOT_HASH_ESCAPED}"
