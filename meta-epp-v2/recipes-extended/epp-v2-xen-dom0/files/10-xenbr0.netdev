@@ -1,0 +1,4 @@
+# Bridge for the Xen DomU network (vif-bridge adds the DomU vifs to it)
+[NetDev]
+Name=xenbr0
+Kind=bridge

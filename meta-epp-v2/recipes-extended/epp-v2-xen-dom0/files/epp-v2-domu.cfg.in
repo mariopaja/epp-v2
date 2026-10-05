@@ -1,0 +1,9 @@
+# epp-v2 Linux as Xen DomU (--xen=domu: started at boot by xendomains through
+# /etc/xen/auto/epp-v2.cfg). Console: xl console epp-v2 (Ctrl-] to leave)
+name = "epp-v2"
+kernel = "/boot/Image"
+cmdline = "console=hvc0 root=/dev/xvda rw rootwait"
+memory = @@EPP_XEN_LINUX_MEM@@
+vcpus = @@EPP_XEN_LINUX_VCPUS@@
+disk = [ 'phy:@@EPP_DOMU_DISK@@,xvda,w' ]
+vif = [ 'bridge=xenbr0' ]

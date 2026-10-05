@@ -1,0 +1,14 @@
+# short-description: epp-v2 Xen SD card: boot, minimal Dom0, epp-v2 DomU
+# Same layout as meta-freescale imx-imx-boot-bootpart.wks.in, plus partition 3
+# with the epp-v2-image rootfs for the Xen DomU (/dev/mmcblk1p3 in Dom0).
+#
+#  - ---------- ------ ------------- ---------------------------
+# | | imx-boot | boot | Dom0 rootfs | DomU rootfs (epp-v2-image) |
+#  - ---------- ------ ------------- ---------------------------
+#
+part u-boot --source rawcopy --sourceparams="file=imx-boot.tagged" --ondisk mmcblk --no-table --align ${IMX_BOOT_SEEK}
+part /boot --source bootimg-partition --ondisk mmcblk --fstype=vfat --label boot --active --align 8192 --fixed-size 256
+part / --source rootfs --ondisk mmcblk --fstype=ext4 --label root --align 8192
+part --source rawcopy --sourceparams="file=${EPP_DOMU_ROOTFS}" --ondisk mmcblk --fstype=ext4 --label domu --align 8192
+
+bootloader --ptable msdos

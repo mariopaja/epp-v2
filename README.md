@@ -33,7 +33,10 @@ epp-v2/
 │   └── yocto-build.sh    # Runs inside the container: repo sync, setup, bitbake
 └── meta-epp-v2/          # Custom Yocto layer
     ├── conf/layer.conf
-    ├── recipes-core/images/epp-v2-image.bb
+    ├── recipes-core/images/epp-v2-image.bb       # the epp-v2 Linux
+    ├── recipes-core/images/epp-v2-dom0-image.bb  # minimal Xen Dom0 (--xen=domu / dom0less)
+    ├── recipes-extended/epp-v2-xen-dom0/         # Dom0: xenbr0, backends, DomU start
+    ├── files/wic/epp-v2-xen-domu.wks.in          # SD layout with the DomU partition
     ├── recipes-core/base-files/          # hostname
     ├── recipes-connectivity/openssh/     # root SSH login
     ├── recipes-kernel/linux/             # kernel config fragment (epp-v2.cfg)
@@ -58,20 +61,42 @@ including the proxy setup if needed). Around 300 GB of free disk space.
 When it finishes, `docker-run.sh` prints the start and end time and how long
 the build took.
 
-Build with the **Xen hypervisor** (Linux boots as Xen Dom0, `xen` is added to
-the boot partition and the Xen tools such as `xl` to the rootfs):
+### Xen
+
+`--xen=<mode>` builds with the Xen hypervisor. Without it the image is plain
+Linux, with no Xen at all.
 
 ```bash
-./docker-run.sh --xen
-SKIP_SYNC=1 ./docker-run.sh --xen
+./docker-run.sh --xen              # same as --xen=dom0less
+./docker-run.sh --xen=dom0less
+./docker-run.sh --xen=domu
+./docker-run.sh --xen=dom0
+SKIP_SYNC=1 ./docker-run.sh --xen  # rebuild without repo sync
 ```
 
-Without `--xen` the image is plain Linux, with no Xen at all. Both variants
-are kept in the sstate cache, so switching back and forth only rebuilds the
-image, but they share `images/`, so the last build is the one flashed. On a
-Xen image, Xen can be skipped for one board from the U-Boot prompt with
-`setenv epp_xen no; saveenv`. Dom0 gets 2 vCPUs and 4 GB RAM by default
-(`xenhyper_bootargs` in U-Boot).
+| Mode | Dom0 | epp-v2 Linux | SD card |
+|---|---|---|---|
+| (none) | – | runs directly, no Xen | boot, rootfs |
+| `dom0` | the epp-v2 Linux | Dom0 (owns all hardware, runs `xl`) | boot, rootfs |
+| `domu` | minimal (`epp-v2-dom0-image`) | DomU, started by `xendomains` from `/etc/xen/epp-v2.cfg` | boot, Dom0 rootfs, DomU rootfs |
+| `dom0less` | minimal (`epp-v2-dom0-image`) | DomU, created by Xen at boot from the device tree (`/chosen/domU1`); Dom0 then attaches its disk and network (`epp-v2-dom0less.service`) | boot, Dom0 rootfs, DomU rootfs |
+
+- CPU cores and RAM of the epp-v2 Linux and of the minimal Dom0 are set in
+  [board.conf](board.conf) (`EPP_XEN_LINUX_*`, `EPP_XEN_DOM0_*`). Defaults:
+  epp-v2 Linux 2 vCPUs / 4 GB, minimal Dom0 1 vCPU / 1 GB.
+- `domu` / `dom0less`: the DomU disk is partition 3 (`/dev/xvda` in the DomU,
+  `/dev/mmcblk1p3` in Dom0). Its network goes through the bridge `xenbr0` in
+  Dom0, which contains `EPP_XEN_UPLINK` (default `eth0`); Dom0 and DomU both get
+  their address by DHCP. Dom0 is called `epp-v2-dom0`.
+- Consoles: `domu`: `xl console epp-v2` in Dom0. `dom0less`: the DomU uses the
+  emulated PL011 (`ttyAMA0`); press Ctrl-a three times on the serial console to
+  switch between Xen, Dom0 and the DomU.
+- Without Xen for one boot: `setenv epp_xen no; saveenv` at the U-Boot prompt
+  (boots partition 2 directly; with `domu` / `dom0less` that is the minimal
+  Dom0 image).
+- Each build writes `images/epp-v2-sdcard.wic.zst`, the SD card image of that
+  build, which `flash-sd.sh` flashes. All variants share `images/`, so the
+  last build is the one flashed.
 
 Rebuild without re-syncing the BSP sources:
 
@@ -146,7 +171,7 @@ confirm. It then unmounts the card and writes the image with `bmaptool`
 Manual alternative (replace `/dev/sdX`, check with `lsblk` first):
 
 ```bash
-sudo bmaptool copy images/epp-v2-image-imx95-15x15-lpddr4x-frdm.rootfs.wic.zst /dev/sdX
+sudo bmaptool copy images/epp-v2-sdcard.wic.zst /dev/sdX
 ```
 
 ## Board configuration (`board.conf`)

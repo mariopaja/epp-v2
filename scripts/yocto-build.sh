@@ -4,7 +4,7 @@
 # conf/auto.conf from board.conf and builds the image.
 #
 # Set SKIP_SYNC=1 to skip "repo sync" on rebuilds.
-# EPP_XEN=yes builds with the Xen hypervisor (docker-run.sh --xen).
+# EPP_XEN=no|dom0|domu|dom0less selects the Xen mode (docker-run.sh --xen=<mode>).
 set -e
 
 for var in EPP_DIR VERSION BRANCH MANIFEST REMOTE MACHINE DISTRO IMAGES DOCKER_WORKDIR DL_DIR SSTATE_DIR; do
@@ -59,11 +59,16 @@ source "${EPP_DIR}/board.conf"
 
 EPP_XEN="${EPP_XEN:-no}"
 case "${EPP_XEN}" in
-    yes) XEN_CONF="" ;;
-    no)  XEN_CONF='DISTRO_FEATURES:remove = "xen"' ;;
-    *)   echo "Error: EPP_XEN must be yes or no (got '${EPP_XEN}')" >&2; exit 1 ;;
+    no)            XEN_CONF='DISTRO_FEATURES:remove = "xen"' ;;
+    dom0)          XEN_CONF="" ;;
+    domu|dom0less) XEN_CONF=""
+                   # The SD card image is the minimal Dom0 image; it embeds
+                   # epp-v2-image as the DomU rootfs partition
+                   IMAGES="${IMAGES/epp-v2-image/epp-v2-dom0-image}" ;;
+    *)  echo "Error: EPP_XEN must be no, dom0, domu or dom0less (got '${EPP_XEN}')" >&2; exit 1 ;;
 esac
 echo "Xen:      ${EPP_XEN}"
+echo "Images:   ${IMAGES}"
 
 # Deterministic salt so the hash (and therefore the rootfs signature) only
 # changes when the password or hostname changes.
@@ -103,6 +108,11 @@ EPP_SSH_ROOT_LOGIN = "${EPP_SSH_ROOT_LOGIN}"
 EPP_OVERLAYS = "${EPP_OVERLAYS}"
 EPP_FDTFILE = "${EPP_FDTFILE}"
 EPP_XEN = "${EPP_XEN}"
+EPP_XEN_LINUX_VCPUS = "${EPP_XEN_LINUX_VCPUS}"
+EPP_XEN_LINUX_MEM = "${EPP_XEN_LINUX_MEM}"
+EPP_XEN_DOM0_VCPUS = "${EPP_XEN_DOM0_VCPUS}"
+EPP_XEN_DOM0_MEM = "${EPP_XEN_DOM0_MEM}"
+EPP_XEN_UPLINK = "${EPP_XEN_UPLINK}"
 EPP_EXTRA_PACKAGES = "${EPP_EXTRA_PACKAGES}"
 EOF
 
@@ -113,8 +123,15 @@ bitbake ${IMAGES}
 DEPLOY_DIR="${DOCKER_WORKDIR}/${BUILD_DIR_NAME}/tmp/deploy/images/${MACHINE}"
 ln -sfn "$(realpath --relative-to="${EPP_DIR}" "${DEPLOY_DIR}")" "${EPP_DIR}/images"
 
+# images/epp-v2-sdcard.wic.zst (+ .bmap): the SD card image of this build,
+# used by flash-sd.sh
+SDCARD_IMAGE="${IMAGES%% *}-${MACHINE}.rootfs.wic"
+ln -sfn "${SDCARD_IMAGE}.zst" "${DEPLOY_DIR}/epp-v2-sdcard.wic.zst"
+ln -sfn "${SDCARD_IMAGE}.bmap" "${DEPLOY_DIR}/epp-v2-sdcard.wic.bmap"
+
 echo ""
 echo "========================================="
 echo "✅ Build completed successfully!"
 echo "Images: ${EPP_DIR}/images -> ${DEPLOY_DIR}"
+echo "SD card: ${EPP_DIR}/images/epp-v2-sdcard.wic.zst -> ${SDCARD_IMAGE}.zst (Xen: ${EPP_XEN})"
 echo "========================================="

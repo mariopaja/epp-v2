@@ -1,0 +1,7 @@
+# DomU backend interfaces: added to xenbr0 by the Xen hotplug scripts, keep
+# networkd (80-wired.network: DHCP on every ethernet port) away from them
+[Match]
+Name=vif*
+
+[Link]
+Unmanaged=yes

@@ -1,0 +1,9 @@
+# Dom0 gets its IP on the bridge
+[Match]
+Name=xenbr0
+
+[Network]
+DHCP=yes
+
+[DHCP]
+ClientIdentifier=mac

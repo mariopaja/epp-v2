@@ -2,17 +2,21 @@
 # Start the build container. With no arguments it runs the full Yocto build;
 # pass "bash" (or any command) to get an interactive shell instead.
 #
-# Usage: ./docker-run.sh            # full build (repo sync + bitbake), plain Linux
-#        ./docker-run.sh --xen      # full build with the Xen hypervisor (Linux as Dom0)
-#        ./docker-run.sh bash       # interactive shell in the container
+# Usage: ./docker-run.sh                  # full build (repo sync + bitbake), plain Linux
+#        ./docker-run.sh --xen            # same as --xen=dom0less
+#        ./docker-run.sh --xen=dom0less   # Xen starts the epp-v2 Linux DomU at boot
+#        ./docker-run.sh --xen=domu       # Xen, minimal Dom0 starts the epp-v2 Linux DomU
+#        ./docker-run.sh --xen=dom0       # Xen, epp-v2 Linux as Dom0
+#        ./docker-run.sh bash             # interactive shell in the container
 set -e
 source "$(dirname "${BASH_SOURCE[0]}")/config.sh"
 
 EPP_XEN=no
-if [ "$1" = "--xen" ]; then
-    EPP_XEN=yes
-    shift
-fi
+case "$1" in
+    --xen) EPP_XEN=dom0less; shift ;;
+    --xen=dom0|--xen=domu|--xen=dom0less) EPP_XEN="${1#--xen=}"; shift ;;
+    --xen=*) echo "Unknown Xen mode '${1#--xen=}' (use dom0, domu or dom0less)" >&2; exit 1 ;;
+esac
 
 if [ $# -eq 0 ]; then
     set -- "${EPP_DIR}/scripts/yocto-build.sh"

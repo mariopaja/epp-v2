@@ -3,7 +3,7 @@
 # Lists removable / USB / SD-reader disks, asks which one to use and writes the
 # image with bmaptool (falls back to dd).
 #
-# Usage: ./flash-sd.sh [IMAGE.wic.zst]   # flash (default: latest build in images/)
+# Usage: ./flash-sd.sh [IMAGE.wic.zst]   # flash (default: SD card image of the last build)
 #        ./flash-sd.sh --list            # only list candidate disks
 set -e
 source "$(dirname "${BASH_SOURCE[0]}")/config.sh"
@@ -13,7 +13,7 @@ IMAGE=""
 case "$1" in
     -l|--list) LIST_ONLY=1 ;;
     -h|--help) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    "") IMAGE="${EPP_DIR}/images/epp-v2-image-${MACHINE}.rootfs.wic.zst" ;;
+    "") IMAGE="${EPP_DIR}/images/epp-v2-sdcard.wic.zst" ;;
     *) IMAGE="$1" ;;
 esac
 

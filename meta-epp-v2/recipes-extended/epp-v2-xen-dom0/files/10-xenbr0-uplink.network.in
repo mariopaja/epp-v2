@@ -1,0 +1,6 @@
+# Physical port of the bridge (EPP_XEN_UPLINK in board.conf)
+[Match]
+Name=@@EPP_XEN_UPLINK@@
+
+[Network]
+Bridge=xenbr0
