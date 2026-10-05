@@ -1,11 +1,14 @@
 # epp-v2 U-Boot boot script (compiled to boot.scr).
 # Loads the kernel and base DTB from the boot partition, applies the device
-# tree overlays from overlays/ and boots. If anything fails, the script
-# returns and U-Boot falls back to its default BSP boot command.
+# tree overlays from overlays/ and boots, either Linux directly or Linux as
+# Xen Dom0. If anything fails, the script returns and U-Boot falls back to its
+# default BSP boot command.
 #
 # Override at the U-Boot prompt (then 'saveenv'):
 #   setenv epp_overlays "foo.dtbo bar.dtbo"
 #   setenv epp_fdtfile imx95-15x15-frdm.dtb
+#   setenv epp_xen no                 # boot Linux without Xen
+#   setenv xenhyper_bootargs "..."    # Xen command line (U-Boot default env)
 
 echo "epp-v2: boot script"
 
@@ -24,13 +27,38 @@ fi
 if test -z "${epp_fdtfile}"; then
     setenv epp_fdtfile "@@EPP_FDTFILE@@"
 fi
+if test -z "${epp_xen}"; then
+    setenv epp_xen "@@EPP_XEN@@"
+fi
 if test -z "${fdtoverlay_addr_r}"; then
     setenv fdtoverlay_addr_r 0x93200000
+fi
+if test -z "${xenlinux_addr}"; then
+    setenv xenlinux_addr 0x9c000000
+fi
+if test -z "${xenhyper_bootargs}"; then
+    setenv xenhyper_bootargs "console=dtuart dom0_mem=4096M dom0_max_vcpus=2 pci-passthrough=on"
+fi
+
+# Xen goes to ${loadaddr}, the Dom0 kernel to ${xenlinux_addr}
+# (same layout as the BSP 'xenmmcboot' command).
+setenv epp_kernel_addr ${loadaddr}
+if test "${epp_xen}" = "yes"; then
+    if load ${epp_devtype} ${epp_devpart} ${loadaddr} xen; then
+        echo "epp-v2: booting Linux as Xen Dom0"
+        setenv epp_kernel_addr ${xenlinux_addr}
+        setenv console "hvc0 earlycon=xen"
+        setenv jh_clk "kvm.enable_virt_at_load=false clk_ignore_unused"
+    else
+        echo "epp-v2: WARNING xen not found, booting Linux without Xen"
+        setenv epp_xen no
+    fi
 fi
 
 run mmcargs
 
-if load ${epp_devtype} ${epp_devpart} ${loadaddr} ${image}; then
+if load ${epp_devtype} ${epp_devpart} ${epp_kernel_addr} ${image}; then
+    setenv epp_kernel_size ${filesize}
     if load ${epp_devtype} ${epp_devpart} ${fdt_addr_r} ${epp_fdtfile}; then
         fdt addr ${fdt_addr_r}
         fdt resize 0x20000
@@ -42,6 +70,15 @@ if load ${epp_devtype} ${epp_devpart} ${loadaddr} ${image}; then
                 echo "epp-v2: WARNING overlay ${ov} not found"
             fi
         done
+        if test "${epp_xen}" = "yes"; then
+            # Pass the kernel to Xen as Dom0 module; Xen owns the SMMU
+            fdt mknode /chosen module@0
+            fdt set /chosen/module@0 compatible "xen,linux-zimage" "xen,multiboot-module"
+            fdt set /chosen/module@0 reg <0x00000000 ${epp_kernel_addr} 0x00000000 0x${epp_kernel_size}>
+            fdt set /chosen/module@0 bootargs "${bootargs} ${xenlinux_bootargs}"
+            fdt set /soc/bus@49000000/iommu@490d0000 status disabled
+            setenv bootargs ${xenhyper_bootargs}
+        fi
         booti ${loadaddr} - ${fdt_addr_r}
     fi
 fi

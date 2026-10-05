@@ -7,6 +7,7 @@ IMAGE_FEATURES += "ssh-server-openssh package-management"
 
 IMAGE_INSTALL:append = " \
     kernel-modules \
+    ${@bb.utils.contains('DISTRO_FEATURES', 'xen', 'xen-tools', '', d)} \
     ${EPP_EXTRA_PACKAGES} \
 "
 
@@ -23,14 +24,16 @@ python () {
                 "Build through scripts/yocto-build.sh to apply board.conf.")
 }
 
-# Boot script + device tree overlays on the FAT boot partition
-# (mounted at /boot on the target)
+# Boot script, device tree overlays and the Xen hypervisor on the FAT boot
+# partition (mounted at /boot on the target)
 IMAGE_BOOT_FILES:append = " \
     boot.scr \
     devicetree/*.dtbo;overlays/ \
+    ${@bb.utils.contains('DISTRO_FEATURES', 'xen', 'xen', '', d)} \
 "
 do_image_wic[depends] += " \
     epp-v2-bootscript:do_deploy \
     epp-v2-overlays:do_deploy \
+    ${@bb.utils.contains('DISTRO_FEATURES', 'xen', 'xen:do_deploy', '', d)} \
 "
 IMAGE_ROOTFS_EXTRA_SPACE = "4194304"

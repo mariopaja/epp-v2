@@ -4,6 +4,7 @@
 # conf/auto.conf from board.conf and builds the image.
 #
 # Set SKIP_SYNC=1 to skip "repo sync" on rebuilds.
+# EPP_XEN=yes builds with the Xen hypervisor (docker-run.sh --xen).
 set -e
 
 for var in EPP_DIR VERSION BRANCH MANIFEST REMOTE MACHINE DISTRO IMAGES DOCKER_WORKDIR DL_DIR SSTATE_DIR; do
@@ -56,6 +57,14 @@ fi
 # edit board.conf / config.sh rather than auto.conf).
 source "${EPP_DIR}/board.conf"
 
+EPP_XEN="${EPP_XEN:-no}"
+case "${EPP_XEN}" in
+    yes) XEN_CONF="" ;;
+    no)  XEN_CONF='DISTRO_FEATURES:remove = "xen"' ;;
+    *)   echo "Error: EPP_XEN must be yes or no (got '${EPP_XEN}')" >&2; exit 1 ;;
+esac
+echo "Xen:      ${EPP_XEN}"
+
 # Deterministic salt so the hash (and therefore the rootfs signature) only
 # changes when the password or hostname changes.
 SALT="$(printf '%s' "${EPP_HOSTNAME}${EPP_ROOT_PASSWORD}" | sha256sum | cut -c1-16)"
@@ -85,6 +94,7 @@ PACKAGE_CLASSES = "package_deb"
 
 # epp-v2 distro policy (meta-epp-v2/conf/epp-v2.conf)
 require conf/epp-v2.conf
+${XEN_CONF}
 
 # Board settings
 EPP_HOSTNAME = "${EPP_HOSTNAME}"
@@ -92,6 +102,7 @@ EPP_ROOT_PASSWORD_HASH = "${ROOT_HASH_ESCAPED}"
 EPP_SSH_ROOT_LOGIN = "${EPP_SSH_ROOT_LOGIN}"
 EPP_OVERLAYS = "${EPP_OVERLAYS}"
 EPP_FDTFILE = "${EPP_FDTFILE}"
+EPP_XEN = "${EPP_XEN}"
 EPP_EXTRA_PACKAGES = "${EPP_EXTRA_PACKAGES}"
 EOF
 

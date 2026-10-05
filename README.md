@@ -58,6 +58,21 @@ including the proxy setup if needed). Around 300 GB of free disk space.
 When it finishes, `docker-run.sh` prints the start and end time and how long
 the build took.
 
+Build with the **Xen hypervisor** (Linux boots as Xen Dom0, `xen` is added to
+the boot partition and the Xen tools such as `xl` to the rootfs):
+
+```bash
+./docker-run.sh --xen
+SKIP_SYNC=1 ./docker-run.sh --xen
+```
+
+Without `--xen` the image is plain Linux, with no Xen at all. Both variants
+are kept in the sstate cache, so switching back and forth only rebuilds the
+image, but they share `images/`, so the last build is the one flashed. On a
+Xen image, Xen can be skipped for one board from the U-Boot prompt with
+`setenv epp_xen no; saveenv`. Dom0 gets 2 vCPUs and 4 GB RAM by default
+(`xenhyper_bootargs` in U-Boot).
+
 Rebuild without re-syncing the BSP sources:
 
 ```bash

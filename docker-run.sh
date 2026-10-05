@@ -2,10 +2,17 @@
 # Start the build container. With no arguments it runs the full Yocto build;
 # pass "bash" (or any command) to get an interactive shell instead.
 #
-# Usage: ./docker-run.sh            # full build (repo sync + bitbake)
+# Usage: ./docker-run.sh            # full build (repo sync + bitbake), plain Linux
+#        ./docker-run.sh --xen      # full build with the Xen hypervisor (Linux as Dom0)
 #        ./docker-run.sh bash       # interactive shell in the container
 set -e
 source "$(dirname "${BASH_SOURCE[0]}")/config.sh"
+
+EPP_XEN=no
+if [ "$1" = "--xen" ]; then
+    EPP_XEN=yes
+    shift
+fi
 
 if [ $# -eq 0 ]; then
     set -- "${EPP_DIR}/scripts/yocto-build.sh"
@@ -17,6 +24,7 @@ echo "Running ${TAG}"
 echo "  Machine:  ${MACHINE}"
 echo "  Distro:   ${DISTRO}"
 echo "  Images:   ${IMAGES}"
+echo "  Xen:      ${EPP_XEN}"
 echo "  Workdir:  ${DOCKER_WORKDIR}"
 echo ""
 
@@ -44,7 +52,7 @@ fi
 
 for var in EPP_DIR VERSION BRANCH MANIFEST REMOTE MACHINE DISTRO IMAGES \
            DOCKER_WORKDIR DL_DIR SSTATE_DIR BB_NUMBER_THREADS PARALLEL_MAKE_JOBS \
-           SKIP_SYNC; do
+           SKIP_SYNC EPP_XEN; do
     DOCKER_ARGS+=(--env "${var}=${!var}")
 done
 

@@ -13,11 +13,12 @@ S = "${UNPACKDIR}"
 inherit deploy nopackages
 
 # Rebuild the script when the board settings change
-do_compile[vardeps] += "EPP_OVERLAYS EPP_FDTFILE"
+do_compile[vardeps] += "EPP_OVERLAYS EPP_FDTFILE EPP_XEN"
 
 do_compile() {
     sed -e 's|@@EPP_OVERLAYS@@|${EPP_OVERLAYS}|g' \
         -e 's|@@EPP_FDTFILE@@|${EPP_FDTFILE}|g' \
+        -e 's|@@EPP_XEN@@|${EPP_XEN}|g' \
         ${S}/boot.cmd.in > ${B}/boot.cmd
     mkimage -A arm64 -O linux -T script -C none -n "epp-v2 boot script" \
         -d ${B}/boot.cmd ${B}/boot.scr
