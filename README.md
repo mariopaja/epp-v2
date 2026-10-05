@@ -29,6 +29,8 @@ epp-v2/
 ├── flash-sd.sh           # Writes the image to an SD card
 ├── images -> yocto-builds/.../deploy/images/...   # created by the build (gitignored)
 ├── yocto-builds/         # BSP sources, build dir, caches (gitignored)
+├── m7/                 # Cortex-M7 firmware for the boot container (EPP_M7_IMAGE)
+├── zephyr/             # Zephyr board frdm_imx95 (M7 / A55), see zephyr/README.md
 ├── scripts/
 │   └── yocto-build.sh    # Runs inside the container: repo sync, setup, bitbake
 └── meta-epp-v2/          # Custom Yocto layer
@@ -41,6 +43,8 @@ epp-v2/
     ├── recipes-connectivity/openssh/     # root SSH login
     ├── recipes-kernel/linux/             # kernel config fragment (epp-v2.cfg)
     └── recipes-bsp/
+        ├── epp-v2-m7-firmware/           # EPP_M7_IMAGE -> m7_image.bin in imx-boot
+        ├── imx-mkimage/                  # imx-boot: depend on epp-v2-m7-firmware
         ├── epp-v2-overlays/              # device tree overlays (*.dtso)
         └── epp-v2-bootscript/            # U-Boot boot.scr that applies overlays
 ```
@@ -184,6 +188,7 @@ sudo bmaptool copy images/epp-v2-sdcard.wic.zst /dev/sdX
 | `EPP_OVERLAYS` | empty | `.dtbo` files U-Boot applies at boot |
 | `EPP_FDTFILE` | `imx95-15x15-frdm.dtb` | Base device tree |
 | `EPP_EXTRA_PACKAGES` | empty | Extra packages installed in the image |
+| `EPP_M7_IMAGE` | empty | Cortex-M7 firmware (raw `.bin`, path inside this repo, e.g. `m7/zephyr.bin`) packed into the boot container and started by the System Manager at power-on. Empty: NXP's M7 demo. `none`: no M7 image, M7 off. Update only the M7 on a flashed card: `./flash-sd.sh --m7 <file\|none>`. See [zephyr/README.md](zephyr/README.md) |
 
 `scripts/yocto-build.sh` turns these into `conf/auto.conf` in the build
 directory on every build. Edit `board.conf`, not `auto.conf`.

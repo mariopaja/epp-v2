@@ -55,7 +55,10 @@ fi
 
 # Generate conf/auto.conf from board.conf (regenerated on every build, so
 # edit board.conf / config.sh rather than auto.conf).
+# EPP_M7_IMAGE from the environment (flash-sd.sh --m7) wins over board.conf
+EPP_M7_IMAGE_ENV="${EPP_M7_IMAGE}"
 source "${EPP_DIR}/board.conf"
+EPP_M7_IMAGE="${EPP_M7_IMAGE_ENV:-${EPP_M7_IMAGE}}"
 
 EPP_XEN="${EPP_XEN:-no}"
 case "${EPP_XEN}" in
@@ -68,6 +71,27 @@ case "${EPP_XEN}" in
     *)  echo "Error: EPP_XEN must be no, dom0, domu or dom0less (got '${EPP_XEN}')" >&2; exit 1 ;;
 esac
 echo "Xen:      ${EPP_XEN}"
+
+# Cortex-M7 firmware for the boot container (EPP_M7_IMAGE in board.conf)
+EPP_M7_IMAGE_PATH=""
+M7_CONF=""
+if [ "${EPP_M7_IMAGE}" = "none" ]; then
+    # Boot container without any M7 image (flash_a55): the M7 stays off
+    M7_CONF='IMXBOOT_TARGETS:forcevariable = "flash_a55"'
+elif [ -n "${EPP_M7_IMAGE}" ]; then
+    case "${EPP_M7_IMAGE}" in
+        /*) EPP_M7_IMAGE_PATH="${EPP_M7_IMAGE}" ;;
+        *)  EPP_M7_IMAGE_PATH="${EPP_DIR}/${EPP_M7_IMAGE}" ;;
+    esac
+    if [ ! -f "${EPP_M7_IMAGE_PATH}" ]; then
+        echo "Error: EPP_M7_IMAGE not found: ${EPP_M7_IMAGE_PATH}" >&2
+        echo "       (it must be inside ${EPP_DIR}, the build container sees nothing else)" >&2
+        exit 1
+    fi
+    # :forcevariable, the machine conf (parsed after auto.conf) sets it with =
+    M7_CONF='M4_DEFAULT_IMAGE_MX95:forcevariable = "epp-v2-m7.bin"'
+fi
+echo "M7:       ${EPP_M7_IMAGE:-NXP demo}"  # none: no M7 image
 echo "Images:   ${IMAGES}"
 
 # Deterministic salt so the hash (and therefore the rootfs signature) only
@@ -107,6 +131,8 @@ EPP_ROOT_PASSWORD_HASH = "${ROOT_HASH_ESCAPED}"
 EPP_SSH_ROOT_LOGIN = "${EPP_SSH_ROOT_LOGIN}"
 EPP_OVERLAYS = "${EPP_OVERLAYS}"
 EPP_FDTFILE = "${EPP_FDTFILE}"
+EPP_M7_IMAGE_PATH = "${EPP_M7_IMAGE_PATH}"
+${M7_CONF}
 EPP_XEN = "${EPP_XEN}"
 EPP_XEN_LINUX_VCPUS = "${EPP_XEN_LINUX_VCPUS}"
 EPP_XEN_LINUX_MEM = "${EPP_XEN_LINUX_MEM}"
@@ -125,13 +151,17 @@ ln -sfn "$(realpath --relative-to="${EPP_DIR}" "${DEPLOY_DIR}")" "${EPP_DIR}/ima
 
 # images/epp-v2-sdcard.wic.zst (+ .bmap): the SD card image of this build,
 # used by flash-sd.sh
+# (not for IMAGES=imx-boot, used by flash-sd.sh --m7)
 SDCARD_IMAGE="${IMAGES%% *}-${MACHINE}.rootfs.wic"
-ln -sfn "${SDCARD_IMAGE}.zst" "${DEPLOY_DIR}/epp-v2-sdcard.wic.zst"
-ln -sfn "${SDCARD_IMAGE}.bmap" "${DEPLOY_DIR}/epp-v2-sdcard.wic.bmap"
+if [ -e "${DEPLOY_DIR}/${SDCARD_IMAGE}.zst" ]; then
+    ln -sfn "${SDCARD_IMAGE}.zst" "${DEPLOY_DIR}/epp-v2-sdcard.wic.zst"
+    ln -sfn "${SDCARD_IMAGE}.bmap" "${DEPLOY_DIR}/epp-v2-sdcard.wic.bmap"
+fi
 
 echo ""
 echo "========================================="
 echo "✅ Build completed successfully!"
 echo "Images: ${EPP_DIR}/images -> ${DEPLOY_DIR}"
-echo "SD card: ${EPP_DIR}/images/epp-v2-sdcard.wic.zst -> ${SDCARD_IMAGE}.zst (Xen: ${EPP_XEN})"
+[ -e "${DEPLOY_DIR}/${SDCARD_IMAGE}.zst" ] && \
+    echo "SD card: ${EPP_DIR}/images/epp-v2-sdcard.wic.zst -> ${SDCARD_IMAGE}.zst (Xen: ${EPP_XEN})"
 echo "========================================="

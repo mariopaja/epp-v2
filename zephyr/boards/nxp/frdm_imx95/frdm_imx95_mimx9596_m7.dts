@@ -1,0 +1,67 @@
+/*
+ * Copyright 2026 NXP
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+
+#include <nxp/imx/nxp_imx95_m7.dtsi>
+#include "frdm_imx95-pinctrl.dtsi"
+
+/ {
+	model = "NXP FRDM-IMX95 board (M7)";
+	compatible = "nxp,frdm_imx95";
+
+	chosen {
+		/* TCM */
+		zephyr,flash = &itcm;
+		zephyr,sram = &dtcm;
+
+		zephyr,console = &lpuart3;
+		zephyr,shell-uart = &lpuart3;
+	};
+};
+
+/*
+ * The 15x15 package has no GPIO_IO35..37 (gpio5 bits 15..17); the shared
+ * i.MX95 M7 SoC dtsi lists them, so use the 15x15 list from
+ * nxp_mimx95_15x15_a55.dtsi.
+ */
+&gpio5 {
+	pinmux = <&iomuxc_xspi1_data0_gpio_io_bit_gpio5_io_bit0>,
+		 <&iomuxc_xspi1_data1_gpio_io_bit_gpio5_io_bit1>,
+		 <&iomuxc_xspi1_data2_gpio_io_bit_gpio5_io_bit2>,
+		 <&iomuxc_xspi1_data3_gpio_io_bit_gpio5_io_bit3>,
+		 <&iomuxc_xspi1_data4_gpio_io_bit_gpio5_io_bit4>,
+		 <&iomuxc_xspi1_data5_gpio_io_bit_gpio5_io_bit5>,
+		 <&iomuxc_xspi1_data6_gpio_io_bit_gpio5_io_bit6>,
+		 <&iomuxc_xspi1_data7_gpio_io_bit_gpio5_io_bit7>,
+		 <&iomuxc_xspi1_dqs_gpio_io_bit_gpio5_io_bit8>,
+		 <&iomuxc_xspi1_sclk_gpio_io_bit_gpio5_io_bit9>,
+		 <&iomuxc_xspi1_ss0_b_gpio_io_bit_gpio5_io_bit10>,
+		 <&iomuxc_xspi1_ss1_b_gpio_io_bit_gpio5_io_bit11>,
+		 <&iomuxc_gpio_io32_gpio_io_bit_gpio5_io_bit12>,
+		 <&iomuxc_gpio_io33_gpio_io_bit_gpio5_io_bit13>,
+		 <&iomuxc_gpio_io34_gpio_io_bit_gpio5_io_bit14>;
+};
+
+/* Enable eDMA used by LPUART async API (LPUART dmas -> &edma2). */
+&edma2 {
+	status = "okay";
+};
+
+&lpuart3 {
+	status = "okay";
+	current-speed = <115200>;
+	pinctrl-0 = <&lpuart3_default>;
+	pinctrl-names = "default";
+};
+
+&lptmr1 {
+	status = "okay";
+};
+
+&tstmr2 {
+	status = "okay";
+};

@@ -1,0 +1,9 @@
+# Copyright 2025 NXP
+# SPDX-License-Identifier: Apache-2.0
+
+config BOARD_FRDM_IMX95
+	select SOC_MIMX9596_A55 if BOARD_FRDM_IMX95_MIMX9596_A55
+	select SOC_MIMX9596_M7 if BOARD_FRDM_IMX95_MIMX9596_M7
+	# Same as imx95_evk_15x15: a part number that exists in the MCUX device
+	# headers for both A55 and M7.
+	select SOC_PART_NUMBER_MIMX9596AVZXN

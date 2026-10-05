@@ -1,0 +1,19 @@
+#
+# Copyright 2026 NXP
+# SPDX-License-Identifier: Apache-2.0
+#
+
+identifier: frdm_imx95/mimx9596/m7
+name: NXP FRDM-IMX95 (M7)
+type: mcu
+arch: arm
+ram: 256
+flash: 256
+toolchain:
+  - zephyr
+  - gnuarmemb
+supported:
+  - counter
+  - dma
+  - uart
+vendor: nxp

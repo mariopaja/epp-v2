@@ -1,0 +1,48 @@
+/*
+ * Copyright 2025 NXP
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * FRDM-IMX95 pin configuration. Pins taken from the Linux device tree
+ * imx95-15x15-frdm.dts and the MCUXpresso SDK board frdmimx95.
+ */
+
+#include <nxp/imx/pinctrl/mimx9596cvtxn-pinctrl.dtsi>
+
+&pinctrl {
+	/* A55 debug console (USB debug port) */
+	lpuart1_default: lpuart1_default {
+		group0 {
+			pinmux = <&iomuxc_uart1_rxd_lpuart_rx_lpuart1_rx>,
+				 <&iomuxc_uart1_txd_lpuart_tx_lpuart1_tx>;
+			bias-pull-up;
+			slew-rate = "slightly_fast";
+			drive-strength = "x4";
+		};
+	};
+
+	/*
+	 * M7 debug console (USB debug port, channel A). Routed to the debug
+	 * port only while PCAL6524 (LPI2C2, 0x22) line 3 "UART3/GPIO select"
+	 * is low; Linux sets it with a gpio-hog.
+	 */
+	lpuart3_default: lpuart3_default {
+		group0 {
+			pinmux = <&iomuxc_gpio_io15_lpuart_rx_lpuart3_rx>,
+				 <&iomuxc_gpio_io14_lpuart_tx_lpuart3_tx>;
+			bias-pull-up;
+			slew-rate = "slightly_fast";
+			drive-strength = "x4";
+		};
+	};
+
+	/* CAN2 (needs PCAL6524 line 4 "CAN2&5/GPIO select" low) */
+	flexcan2_default: flexcan2_default {
+		group0 {
+			pinmux = <&iomuxc_gpio_io27_can_rx_can2_rx>,
+				 <&iomuxc_gpio_io25_can_tx_can2_tx>;
+			bias-pull-down;
+			slew-rate = "slightly_fast";
+			drive-strength = "x4";
+		};
+	};
+};
