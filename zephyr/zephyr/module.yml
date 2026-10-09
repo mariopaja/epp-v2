@@ -1,5 +1,7 @@
-# Zephyr module with the epp-v2 board(s): frdm_imx95
+# Zephyr module with the epp-v2 board(s) (frdm_imx95) and Xen DomU drivers
 name: epp-v2
 build:
+  cmake: .
+  kconfig: Kconfig
   settings:
     board_root: .

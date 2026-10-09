@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+
+menu "epp-v2"
+
+config EPP_XEN_XENSTORE
+	bool "Xenstore client for a Xen DomU"
+	depends on XEN && !XEN_DOM0
+	help
+	  Xenstore client for a Zephyr DomU (read, write, directory) over the
+	  xenstore ring page and event channel Xen provides to the domain. For
+	  dom0less domains the domain needs "xen,enhanced"; the client waits
+	  until Dom0 (init-dom0less) has set up the xenstore page.
+
+endmenu
