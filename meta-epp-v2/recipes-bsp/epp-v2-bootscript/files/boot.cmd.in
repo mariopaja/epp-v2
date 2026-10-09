@@ -116,6 +116,27 @@ if load ${epp_devtype} ${epp_devpart} ${epp_kernel_addr} ${image}; then
             fdt set /chosen/module@0 bootargs "${bootargs} ${xenlinux_bootargs}"
             fdt set /soc/bus@49000000/iommu@490d0000 status disabled
         fi
+        # Xen numbers dom0less domains in /chosen order, and fdt mknode puts
+        # a new node first: create domU2 (Zephyr) before domU1 so that the
+        # epp-v2 Linux DomU is domain 1 (epp-v2-dom0less.service attaches
+        # its disk and network to domain 1) and Zephyr domain 2.
+        if test "${epp_xen}" = "dom0less" && test "${epp_zephyr_domu}" = "yes"; then
+            # Zephyr (xenvm) DomU: console on the emulated PL011; xenstore
+            # (xen,enhanced) set up by init-dom0less in Dom0, for Xen PV
+            # devices such as the network frontend
+            echo "epp-v2: dom0less Zephyr DomU: @@EPP_XEN_ZEPHYR_VCPUS@@ vCPU, @@EPP_XEN_ZEPHYR_MEM@@ MB"
+            fdt mknode /chosen domU2
+            fdt set /chosen/domU2 compatible "xen,domain"
+            fdt set /chosen/domU2 "#address-cells" <2>
+            fdt set /chosen/domU2 "#size-cells" <2>
+            fdt set /chosen/domU2 memory <0x0 @@EPP_XEN_ZEPHYR_MEM_KB@@>
+            fdt set /chosen/domU2 cpus <@@EPP_XEN_ZEPHYR_VCPUS@@>
+            fdt set /chosen/domU2 vpl011
+            fdt set /chosen/domU2 xen,enhanced "enabled"
+            fdt mknode /chosen/domU2 module@0
+            fdt set /chosen/domU2/module@0 compatible "multiboot,kernel" "multiboot,module"
+            fdt set /chosen/domU2/module@0 reg <0x0 ${epp_zephyr_addr} 0x0 0x${epp_zephyr_size}>
+        fi
         if test "${epp_xen}" = "dom0less"; then
             # DomU created by Xen at boot. Console on the emulated PL011
             # (switch Xen consoles with Ctrl-a three times); disk and network
@@ -133,20 +154,6 @@ if load ${epp_devtype} ${epp_devpart} ${epp_kernel_addr} ${image}; then
             fdt set /chosen/domU1/module@0 compatible "multiboot,kernel" "multiboot,module"
             fdt set /chosen/domU1/module@0 reg <0x0 ${epp_domu_kernel_addr} 0x0 0x${epp_domu_kernel_size}>
             fdt set /chosen/domU1/module@0 bootargs "console=ttyAMA0 root=/dev/xvda rw rootwait"
-        fi
-        if test "${epp_xen}" = "dom0less" && test "${epp_zephyr_domu}" = "yes"; then
-            # Zephyr (xenvm) DomU: no xenstore, console on the emulated PL011
-            echo "epp-v2: dom0less Zephyr DomU: @@EPP_XEN_ZEPHYR_VCPUS@@ vCPU, @@EPP_XEN_ZEPHYR_MEM@@ MB"
-            fdt mknode /chosen domU2
-            fdt set /chosen/domU2 compatible "xen,domain"
-            fdt set /chosen/domU2 "#address-cells" <2>
-            fdt set /chosen/domU2 "#size-cells" <2>
-            fdt set /chosen/domU2 memory <0x0 @@EPP_XEN_ZEPHYR_MEM_KB@@>
-            fdt set /chosen/domU2 cpus <@@EPP_XEN_ZEPHYR_VCPUS@@>
-            fdt set /chosen/domU2 vpl011
-            fdt mknode /chosen/domU2 module@0
-            fdt set /chosen/domU2/module@0 compatible "multiboot,kernel" "multiboot,module"
-            fdt set /chosen/domU2/module@0 reg <0x0 ${epp_zephyr_addr} 0x0 0x${epp_zephyr_size}>
         fi
         if test "${epp_xen}" != "no"; then
             setenv bootargs ${epp_xen_bootargs}

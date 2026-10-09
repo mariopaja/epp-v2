@@ -1,0 +1,24 @@
+From: epp-v2
+Subject: [PATCH] tools/init-dom0less: fix vCPU availability nodes
+
+create_xenstore() wrote "cpu/<n>/availability/" with a trailing slash,
+which xenstored rejects ("could not write path"), so init-dom0less failed
+for every dom0less domain with more than one vCPU and the domain got no
+xenstore (no PV disk/network). The loop also stopped one vCPU short:
+vcpu_max_id is the highest vCPU id, not the vCPU count.
+
+Upstream-Status: Pending
+---
+--- a/tools/helpers/init-dom0less.c
++++ b/tools/helpers/init-dom0less.c
+@@ -181,8 +181,8 @@
+     if (!do_xs_write_dom(xsh, t, domid, "vm", vm_val_str)) goto err;
+     if (!do_xs_write_dom(xsh, t, domid, "name", dom_name_str)) goto err;
+     if (!do_xs_write_dom(xsh, t, domid, "cpu", "")) goto err;
+-    for (i = 0; i < info->vcpu_max_id; i++) {
+-        rc = snprintf(cpu_str, STR_MAX_LENGTH, "cpu/%u/availability/", i);
++    for (i = 0; i <= info->vcpu_max_id; i++) {
++        rc = snprintf(cpu_str, STR_MAX_LENGTH, "cpu/%u/availability", i);
+         if (rc < 0 || rc >= STR_MAX_LENGTH)
+             goto err;
+         rc = -EIO;

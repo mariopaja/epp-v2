@@ -1,0 +1,24 @@
+From: epp-v2
+Subject: [PATCH] tools/libxl: treat an unset b_info.tpm as no TPM
+
+libxl__need_xenpv_qemu() asserted on b_info.tpm, which is left at its
+default in the stub domain config init-dom0less writes for dom0less
+domains, so every "xl block-attach" / "xl network-attach" to a dom0less
+domain aborted with "libxl_defbool_val: Assertion
+`!libxl_defbool_is_default(db)' failed".
+
+Upstream-Status: Pending
+---
+--- a/tools/libs/light/libxl_dm.c
++++ b/tools/libs/light/libxl_dm.c
+@@ -3861,7 +3861,9 @@
+      * Here also check for emulated TPM: if enabled xenpv QEMU is
+      * needed.
+      */
+-    if (d_config->num_vfbs > 0 || libxl_defbool_val(d_config->b_info.tpm)) {
++    if (d_config->num_vfbs > 0 ||
++        (!libxl_defbool_is_default(d_config->b_info.tpm) &&
++         libxl_defbool_val(d_config->b_info.tpm))) {
+         ret = 1;
+         goto out;
+     }

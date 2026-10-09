@@ -27,14 +27,19 @@ EPP_DOMU_DISK ?= "/dev/mmcblk1p3"
 SYSTEMD_SERVICE:${PN} = "epp-v2-dom0less.service"
 SYSTEMD_AUTO_ENABLE:${PN} = "${@'enable' if d.getVar('EPP_XEN') == 'dom0less' else 'disable'}"
 
-do_install[vardeps] += "EPP_XEN EPP_XEN_LINUX_MEM EPP_XEN_LINUX_VCPUS EPP_XEN_UPLINK EPP_DOMU_DISK"
+# Zephyr DomU (domid 2): network card on xenbr0 for its netfront
+EPP_ZEPHYR_NET = "${@'ExecStart=-/usr/sbin/xl network-attach 2 bridge=xenbr0 type=vif' if d.getVar('EPP_XEN_ZEPHYR_IMAGE_PATH') else ''}"
+
+do_install[vardeps] += "EPP_XEN EPP_XEN_LINUX_MEM EPP_XEN_LINUX_VCPUS EPP_XEN_UPLINK EPP_DOMU_DISK \
+                        EPP_ZEPHYR_NET"
 
 do_install() {
     epp_subst() {
         sed -e 's|@@EPP_XEN_UPLINK@@|${EPP_XEN_UPLINK}|g' \
             -e 's|@@EPP_XEN_LINUX_MEM@@|${EPP_XEN_LINUX_MEM}|g' \
             -e 's|@@EPP_XEN_LINUX_VCPUS@@|${EPP_XEN_LINUX_VCPUS}|g' \
-            -e 's|@@EPP_DOMU_DISK@@|${EPP_DOMU_DISK}|g' "$1"
+            -e 's|@@EPP_DOMU_DISK@@|${EPP_DOMU_DISK}|g' \
+            -e 's|@@EPP_ZEPHYR_NET@@|${EPP_ZEPHYR_NET}|g' "$1"
     }
 
     install -d ${D}${sysconfdir}/systemd/network
