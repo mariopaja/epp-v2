@@ -92,6 +92,21 @@ elif [ -n "${EPP_M7_IMAGE}" ]; then
     M7_CONF='M4_DEFAULT_IMAGE_MX95:forcevariable = "epp-v2-m7.bin"'
 fi
 echo "M7:       ${EPP_M7_IMAGE:-NXP demo}"  # none: no M7 image
+
+# Zephyr as second dom0less DomU (EPP_XEN_ZEPHYR_IMAGE in board.conf)
+EPP_XEN_ZEPHYR_IMAGE_PATH=""
+if [ -n "${EPP_XEN_ZEPHYR_IMAGE}" ] && [ "${EPP_XEN}" = "dom0less" ]; then
+    case "${EPP_XEN_ZEPHYR_IMAGE}" in
+        /*) EPP_XEN_ZEPHYR_IMAGE_PATH="${EPP_XEN_ZEPHYR_IMAGE}" ;;
+        *)  EPP_XEN_ZEPHYR_IMAGE_PATH="${EPP_DIR}/${EPP_XEN_ZEPHYR_IMAGE}" ;;
+    esac
+    if [ ! -f "${EPP_XEN_ZEPHYR_IMAGE_PATH}" ]; then
+        echo "Error: EPP_XEN_ZEPHYR_IMAGE not found: ${EPP_XEN_ZEPHYR_IMAGE_PATH}" >&2
+        echo "       (it must be inside ${EPP_DIR}, the build container sees nothing else)" >&2
+        exit 1
+    fi
+    echo "Zephyr DomU: ${EPP_XEN_ZEPHYR_IMAGE} (${EPP_XEN_ZEPHYR_VCPUS} vCPU, ${EPP_XEN_ZEPHYR_MEM} MB)"
+fi
 echo "Images:   ${IMAGES}"
 
 # Deterministic salt so the hash (and therefore the rootfs signature) only
@@ -139,6 +154,9 @@ EPP_XEN_LINUX_MEM = "${EPP_XEN_LINUX_MEM}"
 EPP_XEN_DOM0_VCPUS = "${EPP_XEN_DOM0_VCPUS}"
 EPP_XEN_DOM0_MEM = "${EPP_XEN_DOM0_MEM}"
 EPP_XEN_UPLINK = "${EPP_XEN_UPLINK}"
+EPP_XEN_ZEPHYR_IMAGE_PATH = "${EPP_XEN_ZEPHYR_IMAGE_PATH}"
+EPP_XEN_ZEPHYR_VCPUS = "${EPP_XEN_ZEPHYR_VCPUS}"
+EPP_XEN_ZEPHYR_MEM = "${EPP_XEN_ZEPHYR_MEM}"
 EPP_EXTRA_PACKAGES = "${EPP_EXTRA_PACKAGES}"
 EOF
 

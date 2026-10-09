@@ -2,3 +2,4 @@ yocto-builds/
 /images
 *.log
 /m7/*.bin
+/xen/*.bin

@@ -120,6 +120,28 @@ A55 side.
 
 ## Zephyr as a Xen DomU
 
-Not this board: a Zephyr guest under Xen runs on the virtual machine Xen
-provides, so build it for Zephyr's generic `xenvm` board
-(`west build -b xenvm samples/hello_world`).
+Not the `frdm_imx95` board: a Zephyr guest under Xen runs on the virtual
+machine Xen provides, so it is built for Zephyr's generic
+`xenvm/xenvm/gicv3` board (guest RAM at `0x40000000`, GICv3). For a dom0less
+DomU on this board, [xen/xenvm-dom0less.overlay](xen/xenvm-dom0less.overlay)
+and [xen/xenvm-dom0less.conf](xen/xenvm-dom0less.conf) switch the console to
+the PL011 Xen emulates for the domain (`0x22000000`; the Xen PV console of
+`xenvm` needs xenstore, which a dom0less guest without `xen,enhanced` does not
+have) and add the arm64 image header Xen needs to load the kernel:
+
+```bash
+west build -p -b xenvm/xenvm/gicv3 samples/synchronization -- \
+    -DEXTRA_DTC_OVERLAY_FILE=$HOME/dev/epp-v2/zephyr/xen/xenvm-dom0less.overlay \
+    -DEXTRA_CONF_FILE=$HOME/dev/epp-v2/zephyr/xen/xenvm-dom0less.conf
+cp build/zephyr/zephyr.bin $HOME/dev/epp-v2/xen/zephyr.bin
+```
+
+Then set `EPP_XEN_ZEPHYR_IMAGE="xen/zephyr.bin"` in
+[board.conf](../board.conf), build with `./docker-run.sh --xen` and flash.
+`boot.scr` creates the domain `/chosen/domU2` (`EPP_XEN_ZEPHYR_VCPUS`,
+`EPP_XEN_ZEPHYR_MEM`; the memory must cover the 16 MB RAM of `xenvm`). Its
+output appears on the Xen serial console (`ttyACM0`); Ctrl-a three times
+moves the input to DOM2.
+
+Tested on hardware: `samples/synchronization` as DomU2 next to the epp-v2
+Linux DomU, with Zephyr on the M7 at the same time.

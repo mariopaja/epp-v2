@@ -9,7 +9,9 @@
 #   dom0      Xen, Linux from partition 2 as Dom0
 #   domu      Xen, minimal Dom0 from partition 2; Dom0 starts the DomU
 #   dom0less  Xen, minimal Dom0 from partition 2 and the DomU (rootfs on
-#             partition 3) created by Xen at boot from /chosen/domU1
+#             partition 3) created by Xen at boot from /chosen/domU1; with
+#             EPP_XEN_ZEPHYR_IMAGE also a Zephyr DomU (/chosen/domU2) from
+#             zephyr-domu.bin
 #
 # Override at the U-Boot prompt (then 'saveenv'):
 #   setenv epp_overlays "foo.dtbo bar.dtbo"
@@ -51,6 +53,13 @@ fi
 if test -z "${epp_domu_kernel_addr}"; then
     setenv epp_domu_kernel_addr 0xa4400000
 fi
+if test -z "${epp_zephyr_domu}"; then
+    setenv epp_zephyr_domu "@@EPP_XEN_ZEPHYR@@"
+fi
+# Zephyr DomU image above the Linux DomU kernel
+if test -z "${epp_zephyr_addr}"; then
+    setenv epp_zephyr_addr 0xa8000000
+fi
 
 # Xen goes to ${loadaddr}, the Dom0 kernel to ${xenlinux_addr} (same layout
 # as the BSP 'xenmmcboot' command), the dom0less DomU kernel to
@@ -78,6 +87,14 @@ if load ${epp_devtype} ${epp_devpart} ${epp_kernel_addr} ${image}; then
         else
             echo "epp-v2: WARNING DomU kernel not loaded, booting Xen with Dom0 only"
             setenv epp_xen domu
+        fi
+    fi
+    if test "${epp_xen}" = "dom0less" && test "${epp_zephyr_domu}" = "yes"; then
+        if load ${epp_devtype} ${epp_devpart} ${epp_zephyr_addr} zephyr-domu.bin; then
+            setenv epp_zephyr_size ${filesize}
+        else
+            echo "epp-v2: WARNING zephyr-domu.bin not found, no Zephyr DomU"
+            setenv epp_zephyr_domu no
         fi
     fi
     if load ${epp_devtype} ${epp_devpart} ${fdt_addr_r} ${epp_fdtfile}; then
@@ -116,6 +133,20 @@ if load ${epp_devtype} ${epp_devpart} ${epp_kernel_addr} ${image}; then
             fdt set /chosen/domU1/module@0 compatible "multiboot,kernel" "multiboot,module"
             fdt set /chosen/domU1/module@0 reg <0x0 ${epp_domu_kernel_addr} 0x0 0x${epp_domu_kernel_size}>
             fdt set /chosen/domU1/module@0 bootargs "console=ttyAMA0 root=/dev/xvda rw rootwait"
+        fi
+        if test "${epp_xen}" = "dom0less" && test "${epp_zephyr_domu}" = "yes"; then
+            # Zephyr (xenvm) DomU: no xenstore, console on the emulated PL011
+            echo "epp-v2: dom0less Zephyr DomU: @@EPP_XEN_ZEPHYR_VCPUS@@ vCPU, @@EPP_XEN_ZEPHYR_MEM@@ MB"
+            fdt mknode /chosen domU2
+            fdt set /chosen/domU2 compatible "xen,domain"
+            fdt set /chosen/domU2 "#address-cells" <2>
+            fdt set /chosen/domU2 "#size-cells" <2>
+            fdt set /chosen/domU2 memory <0x0 @@EPP_XEN_ZEPHYR_MEM_KB@@>
+            fdt set /chosen/domU2 cpus <@@EPP_XEN_ZEPHYR_VCPUS@@>
+            fdt set /chosen/domU2 vpl011
+            fdt mknode /chosen/domU2 module@0
+            fdt set /chosen/domU2/module@0 compatible "multiboot,kernel" "multiboot,module"
+            fdt set /chosen/domU2/module@0 reg <0x0 ${epp_zephyr_addr} 0x0 0x${epp_zephyr_size}>
         fi
         if test "${epp_xen}" != "no"; then
             setenv bootargs ${epp_xen_bootargs}

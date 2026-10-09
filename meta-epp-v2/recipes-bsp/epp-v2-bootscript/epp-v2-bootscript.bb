@@ -20,9 +20,14 @@ EPP_DOM0_VCPUS = "${@d.getVar('EPP_XEN_LINUX_VCPUS') if d.getVar('EPP_LINUX_IS_D
 # Xen wants the dom0less DomU memory in KB
 EPP_DOMU_MEM_KB = "${@hex(int(d.getVar('EPP_XEN_LINUX_MEM')) * 1024)}"
 
+# Zephyr dom0less DomU (EPP_XEN_ZEPHYR_IMAGE): memory in KB for Xen
+EPP_XEN_ZEPHYR = "${@'yes' if d.getVar('EPP_XEN_ZEPHYR_IMAGE_PATH') else 'no'}"
+EPP_XEN_ZEPHYR_MEM_KB = "${@hex(int(d.getVar('EPP_XEN_ZEPHYR_MEM')) * 1024)}"
+
 # Rebuild the script when the board settings change
 do_compile[vardeps] += "EPP_OVERLAYS EPP_FDTFILE EPP_XEN EPP_DOM0_MEM EPP_DOM0_VCPUS \
-                        EPP_XEN_LINUX_MEM EPP_XEN_LINUX_VCPUS"
+                        EPP_XEN_LINUX_MEM EPP_XEN_LINUX_VCPUS \
+                        EPP_XEN_ZEPHYR EPP_XEN_ZEPHYR_MEM EPP_XEN_ZEPHYR_VCPUS"
 
 do_compile() {
     sed -e 's|@@EPP_OVERLAYS@@|${EPP_OVERLAYS}|g' \
@@ -33,6 +38,10 @@ do_compile() {
         -e 's|@@EPP_DOMU_MEM@@|${EPP_XEN_LINUX_MEM}|g' \
         -e 's|@@EPP_DOMU_MEM_KB@@|${EPP_DOMU_MEM_KB}|g' \
         -e 's|@@EPP_DOMU_VCPUS@@|${EPP_XEN_LINUX_VCPUS}|g' \
+        -e 's|@@EPP_XEN_ZEPHYR@@|${EPP_XEN_ZEPHYR}|g' \
+        -e 's|@@EPP_XEN_ZEPHYR_MEM_KB@@|${EPP_XEN_ZEPHYR_MEM_KB}|g' \
+        -e 's|@@EPP_XEN_ZEPHYR_MEM@@|${EPP_XEN_ZEPHYR_MEM}|g' \
+        -e 's|@@EPP_XEN_ZEPHYR_VCPUS@@|${EPP_XEN_ZEPHYR_VCPUS}|g' \
         ${S}/boot.cmd.in > ${B}/boot.cmd
     mkimage -A arm64 -O linux -T script -C none -n "epp-v2 boot script" \
         -d ${B}/boot.cmd ${B}/boot.scr

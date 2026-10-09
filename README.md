@@ -30,6 +30,7 @@ epp-v2/
 ├── images -> yocto-builds/.../deploy/images/...   # created by the build (gitignored)
 ├── yocto-builds/         # BSP sources, build dir, caches (gitignored)
 ├── m7/                 # Cortex-M7 firmware for the boot container (EPP_M7_IMAGE)
+├── xen/                # Zephyr image for the Xen dom0less DomU (EPP_XEN_ZEPHYR_IMAGE)
 ├── zephyr/             # Zephyr board frdm_imx95 (M7 / A55), see zephyr/README.md
 ├── scripts/
 │   └── yocto-build.sh    # Runs inside the container: repo sync, setup, bitbake
@@ -44,6 +45,7 @@ epp-v2/
     ├── recipes-kernel/linux/             # kernel config fragment (epp-v2.cfg)
     └── recipes-bsp/
         ├── epp-v2-m7-firmware/           # EPP_M7_IMAGE -> m7_image.bin in imx-boot
+        ├── epp-v2-xen-zephyr/            # EPP_XEN_ZEPHYR_IMAGE -> zephyr-domu.bin
         ├── imx-mkimage/                  # imx-boot: depend on epp-v2-m7-firmware
         ├── epp-v2-overlays/              # device tree overlays (*.dtso)
         └── epp-v2-bootscript/            # U-Boot boot.scr that applies overlays
@@ -92,9 +94,16 @@ SKIP_SYNC=1 ./docker-run.sh --xen  # rebuild without repo sync
   `/dev/mmcblk1p3` in Dom0). Its network goes through the bridge `xenbr0` in
   Dom0, which contains `EPP_XEN_UPLINK` (default `eth0`); Dom0 and DomU both get
   their address by DHCP. Dom0 is called `epp-v2-dom0`.
-- Consoles: `domu`: `xl console epp-v2` in Dom0. `dom0less`: the DomU uses the
-  emulated PL011 (`ttyAMA0`); press Ctrl-a three times on the serial console to
-  switch between Xen, Dom0 and the DomU.
+- `dom0less` with `EPP_XEN_ZEPHYR_IMAGE` set: a second DomU runs Zephyr
+  (`/chosen/domU2`, image `zephyr-domu.bin` on the boot partition,
+  `EPP_XEN_ZEPHYR_VCPUS` / `EPP_XEN_ZEPHYR_MEM`, default 1 vCPU / 16 MB). It
+  has no disk, network or xenstore; see [zephyr/README.md](zephyr/README.md)
+  for building it.
+- Consoles: `domu`: `xl console epp-v2` in Dom0. `dom0less`: the DomUs use the
+  emulated PL011 (`ttyAMA0` in Linux); press Ctrl-a three times on the serial
+  console to move the input on: DOM0, DOM1 (epp-v2 Linux), DOM2 (Zephyr), Xen.
+  In `screen`, `picocom` or `minicom` Ctrl-a is their own command key: send it
+  with Ctrl-a a. Do not type in the Xen input: `R` reboots the board.
 - Without Xen for one boot: `setenv epp_xen no; saveenv` at the U-Boot prompt
   (boots partition 2 directly; with `domu` / `dom0less` that is the minimal
   Dom0 image).
@@ -188,10 +197,33 @@ sudo bmaptool copy images/epp-v2-sdcard.wic.zst /dev/sdX
 | `EPP_OVERLAYS` | empty | `.dtbo` files U-Boot applies at boot |
 | `EPP_FDTFILE` | `imx95-15x15-frdm.dtb` | Base device tree |
 | `EPP_EXTRA_PACKAGES` | empty | Extra packages installed in the image |
+| `EPP_XEN_ZEPHYR_IMAGE` | empty | Zephyr image (raw `zephyr.bin` for `xenvm/xenvm/gicv3`, path inside this repo, e.g. `xen/zephyr.bin`) started as second DomU with `--xen=dom0less`. `EPP_XEN_ZEPHYR_VCPUS` / `EPP_XEN_ZEPHYR_MEM` (MB) set its resources |
 | `EPP_M7_IMAGE` | empty | Cortex-M7 firmware (raw `.bin`, path inside this repo, e.g. `m7/zephyr.bin`) packed into the boot container and started by the System Manager at power-on. Empty: NXP's M7 demo. `none`: no M7 image, M7 off. Update only the M7 on a flashed card: `./flash-sd.sh --m7 <file\|none>`. See [zephyr/README.md](zephyr/README.md) |
 
 `scripts/yocto-build.sh` turns these into `conf/auto.conf` in the build
 directory on every build. Edit `board.conf`, not `auto.conf`.
+
+### Zephyr images (M7 and Xen DomU)
+
+The Zephyr binaries are not in git (`m7/*.bin` and `xen/*.bin` are in
+`.gitignore`), so `EPP_M7_IMAGE` and `EPP_XEN_ZEPHYR_IMAGE` are empty in the
+repository. After a fresh clone, build both images (see
+[zephyr/README.md](zephyr/README.md)), copy them into this directory, the only
+one the build container sees, and set the paths in `board.conf`:
+
+```bash
+cp <zephyr build for frdm_imx95/mimx9596/m7>/zephyr/zephyr.bin   m7/zephyr.bin
+cp <zephyr build for xenvm/xenvm/gicv3>/zephyr/zephyr.bin          xen/zephyr.bin
+```
+
+```bash
+# board.conf
+EPP_M7_IMAGE="m7/zephyr.bin"            # Zephyr on the Cortex-M7
+EPP_XEN_ZEPHYR_IMAGE="xen/zephyr.bin"   # Zephyr DomU, with ./docker-run.sh --xen
+```
+
+The build stops with an error if a configured file is missing. Keep these
+local edits of `board.conf` out of commits, or leave the settings empty.
 
 **Change the default root password before deploying a device.**
 

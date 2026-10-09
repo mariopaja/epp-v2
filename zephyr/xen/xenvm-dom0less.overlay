@@ -1,0 +1,38 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Zephyr xenvm/xenvm/gicv3 as a Xen dom0less DomU on the FRDM-IMX95.
+ * Console on the PL011 Xen emulates for the domain (vpl011 property of the
+ * /chosen/domU2 node in boot.scr): GUEST_PL011_BASE 0x22000000,
+ * GUEST_VPL011_SPI 32 (SPI 0). Without xenstore in a dom0less guest the Xen
+ * PV console of the xenvm board is not connected, so it is disabled.
+ */
+
+#include <zephyr/dt-bindings/interrupt-controller/arm-gic.h>
+
+/ {
+	chosen {
+		zephyr,console = &vpl011;
+		zephyr,shell-uart = &vpl011;
+	};
+
+	vpl011_clk: vpl011-clk {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <24000000>;
+	};
+
+	vpl011: serial@22000000 {
+		compatible = "arm,pl011";
+		reg = <0x00 0x22000000 0x00 0x1000>;
+		interrupts = <GIC_SPI 0 IRQ_TYPE_LEVEL IRQ_DEFAULT_PRIORITY>;
+		interrupt-parent = <&gic>;
+		clocks = <&vpl011_clk>;
+		current-speed = <115200>;
+		status = "okay";
+	};
+};
+
+&xen_hvc {
+	status = "disabled";
+};
