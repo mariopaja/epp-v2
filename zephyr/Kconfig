@@ -11,4 +11,41 @@ config EPP_XEN_XENSTORE
 	  dom0less domains the domain needs "xen,enhanced"; the client waits
 	  until Dom0 (init-dom0less) has set up the xenstore page.
 
+config EPP_XEN_NETFRONT
+	bool "Xen PV network frontend (netfront) for a Xen DomU"
+	depends on NETWORKING && EPP_XEN_XENSTORE
+	select NET_L2_ETHERNET
+	help
+	  Ethernet interface on the Xen vif Dom0 attaches to the domain
+	  (xl network-attach), e.g. bridged to the physical network in Dom0.
+	  One queue, one page per packet, rx-copy.
+
+if EPP_XEN_NETFRONT
+
+config EPP_XEN_NETFRONT_RX_BUFS
+	int "Receive buffers (pages)"
+	default 32
+
+config EPP_XEN_NETFRONT_TX_BUFS
+	int "Transmit buffers (pages)"
+	default 16
+
+config EPP_XEN_NETFRONT_XENSTORE_TIMEOUT
+	int "Seconds to wait for xenstore"
+	default 300
+
+config EPP_XEN_NETFRONT_THREAD_STACK_SIZE
+	int "Netfront thread stack size"
+	default 2048
+
+config EPP_XEN_NETFRONT_THREAD_PRIORITY
+	int "Netfront thread priority"
+	default 2
+
+module = EPP_XEN_NETFRONT
+module-str = Xen netfront
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # EPP_XEN_NETFRONT
+
 endmenu
