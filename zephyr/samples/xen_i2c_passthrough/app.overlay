@@ -1,0 +1,21 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * LPI2C4 of the i.MX95, passed through by Xen to this DomU at its physical
+ * address (EPP_XEN_ZEPHYR_PASSTHROUGH="lpi2c4" in epp-v2 board.conf). On the
+ * FRDM-IMX95 this is the display bus: IT6263 LVDS-to-HDMI bridge (0x4c HDMI
+ * side, 0x33 LVDS side) and PCA9632 backlight LED driver (0x62).
+ */
+
+#include <zephyr/dt-bindings/i2c/i2c.h>
+
+/ {
+	lpi2c4: i2c@42540000 {
+		compatible = "epp,xen-lpi2c";
+		reg = <0x00 0x42540000 0x00 0x10000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		clock-frequency = <I2C_BITRATE_STANDARD>;
+		status = "okay";
+	};
+};

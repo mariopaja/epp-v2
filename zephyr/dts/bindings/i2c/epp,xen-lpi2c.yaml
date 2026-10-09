@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  NXP LPI2C controller passed through by Xen to a Zephyr DomU. Pin mux and
+  clock are set up outside the DomU (System Manager, Dom0), so there are no
+  pinctrl or clocks properties. Controller mode, polled, no interrupts.
+
+compatible: "epp,xen-lpi2c"
+
+include: [i2c-controller.yaml, base.yaml]
+
+properties:
+  reg:
+    required: true
+
+  functional-clock-frequency:
+    type: int
+    default: 24000000
+    description: |
+      LPI2C functional clock in Hz, as set by the System Manager (Linux in
+      Dom0: /sys/kernel/debug/clk/lpi2cN/clk_rate). The SCL timing is
+      derived from it.

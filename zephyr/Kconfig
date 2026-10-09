@@ -57,4 +57,14 @@ config EPP_XEN_RGPIO
 	  (compatible "epp,xen-rgpio"): no SCMI and no pinctrl, the System
 	  Manager and Dom0 set those up. No interrupts.
 
+config EPP_XEN_LPI2C
+	bool "NXP LPI2C passed through to a Xen DomU"
+	default y
+	depends on I2C && DT_HAS_EPP_XEN_LPI2C_ENABLED
+	help
+	  Minimal controller driver for an LPI2C that Xen passes through to
+	  the DomU (compatible "epp,xen-lpi2c"): no SCMI and no pinctrl, the
+	  System Manager and Dom0 set those up. 7-bit addresses, standard and
+	  fast mode, polled.
+
 endmenu
