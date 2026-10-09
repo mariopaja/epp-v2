@@ -4,14 +4,17 @@ Subject: [PATCH] tools/init-dom0less: fix vCPU availability nodes
 create_xenstore() wrote "cpu/<n>/availability/" with a trailing slash,
 which xenstored rejects ("could not write path"), so init-dom0less failed
 for every dom0less domain with more than one vCPU and the domain got no
-xenstore (no PV disk/network). The loop also stopped one vCPU short:
-vcpu_max_id is the highest vCPU id, not the vCPU count.
+xenstore (no PV disk/network). The loop also stopped one vCPU short
+(vcpu_max_id is the highest vCPU id, not the vCPU count), and it decided
+"online" from the cpupool id used as a bit mask, so in Pool-0 every vCPU
+was marked "offline" and Linux took its CPUs down (psci: CPU0 killed).
+Mark the online vCPUs (id < vcpu_online) as "online".
 
 Upstream-Status: Pending
 ---
 --- a/tools/helpers/init-dom0less.c
 +++ b/tools/helpers/init-dom0less.c
-@@ -181,8 +181,8 @@
+@@ -181,13 +181,13 @@
      if (!do_xs_write_dom(xsh, t, domid, "vm", vm_val_str)) goto err;
      if (!do_xs_write_dom(xsh, t, domid, "name", dom_name_str)) goto err;
      if (!do_xs_write_dom(xsh, t, domid, "cpu", "")) goto err;
@@ -22,3 +25,9 @@ Upstream-Status: Pending
          if (rc < 0 || rc >= STR_MAX_LENGTH)
              goto err;
          rc = -EIO;
+         if (!do_xs_write_dom(xsh, t, domid, cpu_str,
+-                             (info->cpupool & (1 << i)) ? "online" : "offline"))
++                             (i < info->vcpu_online) ? "online" : "offline"))
+             goto err;
+     }
+ 
