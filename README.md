@@ -102,6 +102,11 @@ SKIP_SYNC=1 ./docker-run.sh --xen  # rebuild without repo sync
   gets xenstore and a vif on `xenbr0` (`vif2.0`), so with the Zephyr Xen
   netfront driver it shares the Ethernet port with the Linux DomU and gets
   its own DHCP address; no disk. See [zephyr/README.md](zephyr/README.md).
+- `EPP_XEN_ZEPHYR_CPU` (default core 5): `boot.scr` creates a cpupool with
+  that core and the `null` scheduler for the Zephyr DomU (Xen built with
+  `CONFIG_BOOT_TIME_CPUPOOLS` and `CONFIG_SCHED_NULL`); the other cores form
+  Pool-0 (credit2) for Dom0 and the Linux DomU. Check in Dom0 with
+  `xl cpupool-list` and `xl vcpu-list`.
 - PV devices of dom0less DomUs need the patched Xen tools in
   `meta-epp-v2/recipes-extended/xen/` (`init-dom0less` and `xl
   block-attach` / `network-attach` failed with NXP's version).
@@ -204,6 +209,7 @@ sudo bmaptool copy images/epp-v2-sdcard.wic.zst /dev/sdX
 | `EPP_FDTFILE` | `imx95-15x15-frdm.dtb` | Base device tree |
 | `EPP_EXTRA_PACKAGES` | empty | Extra packages installed in the image |
 | `EPP_XEN_ZEPHYR_IMAGE` | empty | Zephyr image (raw `zephyr.bin` for `xenvm/xenvm/gicv3`, path inside this repo, e.g. `xen/zephyr.bin`) started as second DomU with `--xen=dom0less`. `EPP_XEN_ZEPHYR_VCPUS` / `EPP_XEN_ZEPHYR_MEM` (MB) set its resources |
+| `EPP_XEN_ZEPHYR_CPU` | `5` | Physical A55 core (1-5) reserved for the Zephyr DomU: own Xen cpupool with the `null` scheduler, so its vCPU always runs on that core and no other domain does. Empty: shared cores (credit2). Core 0 is Xen's boot CPU |
 | `EPP_M7_IMAGE` | empty | Cortex-M7 firmware (raw `.bin`, path inside this repo, e.g. `m7/zephyr.bin`) packed into the boot container and started by the System Manager at power-on. Empty: NXP's M7 demo. `none`: no M7 image, M7 off. Update only the M7 on a flashed card: `./flash-sd.sh --m7 <file\|none>`. See [zephyr/README.md](zephyr/README.md) |
 
 `scripts/yocto-build.sh` turns these into `conf/auto.conf` in the build

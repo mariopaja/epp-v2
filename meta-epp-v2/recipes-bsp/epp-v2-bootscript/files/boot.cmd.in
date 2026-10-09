@@ -56,6 +56,9 @@ fi
 if test -z "${epp_zephyr_domu}"; then
     setenv epp_zephyr_domu "@@EPP_XEN_ZEPHYR@@"
 fi
+if test -z "${epp_zephyr_cpu_node}"; then
+    setenv epp_zephyr_cpu_node "@@EPP_XEN_ZEPHYR_CPU_NODE@@"
+fi
 # Zephyr DomU image above the Linux DomU kernel
 if test -z "${epp_zephyr_addr}"; then
     setenv epp_zephyr_addr 0xa8000000
@@ -133,6 +136,21 @@ if load ${epp_devtype} ${epp_devpart} ${epp_kernel_addr} ${image}; then
             fdt set /chosen/domU2 cpus <@@EPP_XEN_ZEPHYR_VCPUS@@>
             fdt set /chosen/domU2 vpl011
             fdt set /chosen/domU2 xen,enhanced "enabled"
+            # Dedicated core: own cpupool with the null scheduler (needs Xen
+            # with BOOT_TIME_CPUPOOLS). The other cores form Pool-0.
+            if test -n "${epp_zephyr_cpu_node}"; then
+                if fdt get value epp_zephyr_cpu_ph ${epp_zephyr_cpu_node} phandle; then
+                    echo "epp-v2: Zephyr DomU on its own core (${epp_zephyr_cpu_node})"
+                    fdt mknode /chosen epp-cpupool-zephyr
+                    fdt set /chosen/epp-cpupool-zephyr compatible "xen,cpupool"
+                    fdt set /chosen/epp-cpupool-zephyr cpupool-cpus <${epp_zephyr_cpu_ph}>
+                    fdt set /chosen/epp-cpupool-zephyr cpupool-sched "null"
+                    fdt set /chosen/epp-cpupool-zephyr phandle <0xe99e0001>
+                    fdt set /chosen/domU2 domain-cpupool <0xe99e0001>
+                else
+                    echo "epp-v2: WARNING ${epp_zephyr_cpu_node} not found, Zephyr DomU shares the cores"
+                fi
+            fi
             fdt mknode /chosen/domU2 module@0
             fdt set /chosen/domU2/module@0 compatible "multiboot,kernel" "multiboot,module"
             fdt set /chosen/domU2/module@0 reg <0x0 ${epp_zephyr_addr} 0x0 0x${epp_zephyr_size}>

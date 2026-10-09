@@ -105,7 +105,11 @@ if [ -n "${EPP_XEN_ZEPHYR_IMAGE}" ] && [ "${EPP_XEN}" = "dom0less" ]; then
         echo "       (it must be inside ${EPP_DIR}, the build container sees nothing else)" >&2
         exit 1
     fi
-    echo "Zephyr DomU: ${EPP_XEN_ZEPHYR_IMAGE} (${EPP_XEN_ZEPHYR_VCPUS} vCPU, ${EPP_XEN_ZEPHYR_MEM} MB)"
+    case "${EPP_XEN_ZEPHYR_CPU}" in
+        ""|[1-5]) ;;
+        *) echo "Error: EPP_XEN_ZEPHYR_CPU must be empty or 1-5 (got '${EPP_XEN_ZEPHYR_CPU}')" >&2; exit 1 ;;
+    esac
+    echo "Zephyr DomU: ${EPP_XEN_ZEPHYR_IMAGE} (${EPP_XEN_ZEPHYR_VCPUS} vCPU, ${EPP_XEN_ZEPHYR_MEM} MB, core ${EPP_XEN_ZEPHYR_CPU:-shared})"
 fi
 echo "Images:   ${IMAGES}"
 
@@ -157,6 +161,7 @@ EPP_XEN_UPLINK = "${EPP_XEN_UPLINK}"
 EPP_XEN_ZEPHYR_IMAGE_PATH = "${EPP_XEN_ZEPHYR_IMAGE_PATH}"
 EPP_XEN_ZEPHYR_VCPUS = "${EPP_XEN_ZEPHYR_VCPUS}"
 EPP_XEN_ZEPHYR_MEM = "${EPP_XEN_ZEPHYR_MEM}"
+EPP_XEN_ZEPHYR_CPU = "${EPP_XEN_ZEPHYR_CPU}"
 EPP_EXTRA_PACKAGES = "${EPP_EXTRA_PACKAGES}"
 EOF
 

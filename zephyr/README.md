@@ -144,6 +144,10 @@ Then set `EPP_XEN_ZEPHYR_IMAGE="xen/zephyr.bin"` in
 output appears on the Xen serial console (`ttyACM0`); Ctrl-a three times
 moves the input to DOM2.
 
+The Zephyr DomU gets its own physical core by default
+(`EPP_XEN_ZEPHYR_CPU="5"`): Xen puts it in a cpupool with the `null`
+scheduler, so its vCPU is never moved or shared with Dom0 or the Linux DomU.
+
 To replace only the Zephyr DomU on a running board, copy the new
 `zephyr.bin` to the boot partition as `zephyr-domu.bin` (from Dom0:
 `mount /dev/mmcblk1p1 /mnt`) and restart the board.
