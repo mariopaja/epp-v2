@@ -192,11 +192,21 @@ west build -p -b xenvm/xenvm/gicv3 $HOME/dev/epp-v2/zephyr/samples/xen_netfront 
 [samples/xen_xenstore](samples/xen_xenstore) only reads the domain's own
 xenstore nodes.
 
+The driver reconnects by itself: when the backend leaves Connected (for
+example `xl network-detach 2 0` in Dom0) it switches the carrier off, closes
+its side so `xl` finishes at once, and waits for a new vif
+(`xl network-attach 2 bridge=xenbr0 type=vif`), which may come with a new MAC;
+DHCP then gets a new address. The ring and buffer pages are granted once and
+the grant references reused, because Zephyr's `gnttab_end_access()` has its
+check inverted (it frees grants that are still in use and keeps released
+ones).
+
 Limitations: one queue, one page per packet (no scatter-gather, no
-checksum/GSO offloads, MTU 1500), receive in rx-copy mode, no reconnect if
-the backend goes away. `xenvm` has no entropy source; the sample uses
+checksum/GSO offloads, MTU 1500), receive in rx-copy mode, the backend must
+stay in the same domain (Dom0). `xenvm` has no entropy source; the sample uses
 `CONFIG_TEST_RANDOM_GENERATOR`, which is fine for DHCP but not for TLS or
 other cryptography.
 
 Tested on hardware: DHCP and ping from the LAN to the Zephyr DomU, next to
-the Linux DomU on the same port and Zephyr on the M7.
+the Linux DomU on the same port and Zephyr on the M7; four detach/attach
+cycles in a row, each reconnecting with a new MAC and address.

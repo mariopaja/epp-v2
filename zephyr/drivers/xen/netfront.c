@@ -61,6 +61,11 @@ struct netfront_data {
 	char backend[64];
 	evtchn_port_t port;
 	bool connected;
+	/* Grants are made once and reused across reconnects (same backend) */
+	bool granted;
+	domid_t granted_to;
+	grant_ref_t tx_ring_ref;
+	grant_ref_t rx_ring_ref;
 
 	netif_tx_front_ring_t txr;
 	netif_rx_front_ring_t rxr;
@@ -349,23 +354,46 @@ static int nf_connect(struct netfront_data *nf)
 	SHARED_RING_INIT((netif_rx_sring_t *)rx_ring_page);
 	FRONT_RING_INIT(&nf->rxr, (netif_rx_sring_t *)rx_ring_page, XEN_PAGE_SIZE);
 
-	grant_ref_t tx_ring_ref = gnttab_grant_access(nf->backend_id,
+	/*
+	 * Grant the ring and buffer pages once: on a reconnect to the same
+	 * backend domain the grant references stay valid and are reused, so
+	 * they never have to be ended (gnttab_end_access() is not reliable).
+	 */
+	if (nf->granted && (nf->granted_to != nf->backend_id)) {
+		LOG_WRN("backend domain changed (%u -> %u): granting again", nf->granted_to,
+			nf->backend_id);
+		nf->granted = false;
+	}
+	if (!nf->granted) {
+		nf->tx_ring_ref = gnttab_grant_access(nf->backend_id,
 						      xen_virt_to_gfn(tx_ring_page), false);
-	grant_ref_t rx_ring_ref = gnttab_grant_access(nf->backend_id,
+		nf->rx_ring_ref = gnttab_grant_access(nf->backend_id,
 						      xen_virt_to_gfn(rx_ring_page), false);
 
-	/* Buffers: RX writable by the backend (rx-copy), TX read-only */
-	for (uint16_t i = 0U; i < NF_RX_BUFS; i++) {
-		nf->rx_gref[i] = gnttab_grant_access(nf->backend_id,
-						     xen_virt_to_gfn(rx_bufs[i]), false);
+		/* Buffers: RX writable by the backend (rx-copy), TX read-only */
+		for (uint16_t i = 0U; i < NF_RX_BUFS; i++) {
+			nf->rx_gref[i] = gnttab_grant_access(
+				nf->backend_id, xen_virt_to_gfn(rx_bufs[i]), false);
+		}
+		for (uint16_t i = 0U; i < NF_TX_BUFS; i++) {
+			nf->tx_gref[i] = gnttab_grant_access(
+				nf->backend_id, xen_virt_to_gfn(tx_bufs[i]), true);
+		}
+		nf->granted = true;
+		nf->granted_to = nf->backend_id;
 	}
+
+	/* All TX buffers free */
+	k_mutex_lock(&nf->tx_lock, K_FOREVER);
 	for (uint16_t i = 0U; i < NF_TX_BUFS; i++) {
-		nf->tx_gref[i] = gnttab_grant_access(nf->backend_id,
-						     xen_virt_to_gfn(tx_bufs[i]), true);
 		nf->tx_free[i] = i;
 	}
 	nf->tx_free_cnt = NF_TX_BUFS;
-	k_sem_init(&nf->tx_slots, NF_TX_BUFS, NF_TX_BUFS);
+	k_sem_reset(&nf->tx_slots);
+	for (uint16_t i = 0U; i < NF_TX_BUFS; i++) {
+		k_sem_give(&nf->tx_slots);
+	}
+	k_mutex_unlock(&nf->tx_lock);
 
 	/* Event channel to the backend */
 	ret = alloc_unbound_event_channel(nf->backend_id);
@@ -377,8 +405,8 @@ static int nf_connect(struct netfront_data *nf)
 	bind_event_channel(nf->port, nf_event_cb, nf);
 	unmask_event_channel(nf->port);
 
-	if ((xs_write_int("tx-ring-ref", tx_ring_ref) != 0) ||
-	    (xs_write_int("rx-ring-ref", rx_ring_ref) != 0) ||
+	if ((xs_write_int("tx-ring-ref", nf->tx_ring_ref) != 0) ||
+	    (xs_write_int("rx-ring-ref", nf->rx_ring_ref) != 0) ||
 	    (xs_write_int("event-channel", nf->port) != 0) ||
 	    (xs_write_int("request-rx-copy", 1U) != 0) ||
 	    (xs_write_int("feature-rx-notify", 1U) != 0) ||
@@ -408,9 +436,38 @@ static int nf_connect(struct netfront_data *nf)
 		return ret;
 	}
 
-	LOG_INF("connected: tx-ring-ref %u, rx-ring-ref %u, evtchn %u", tx_ring_ref, rx_ring_ref,
-		nf->port);
+	LOG_INF("connected: tx-ring-ref %u, rx-ring-ref %u, evtchn %u", nf->tx_ring_ref,
+		nf->rx_ring_ref, nf->port);
 	return 0;
+}
+
+/*
+ * The backend left Connected (xl network-detach, backend restart): stop
+ * using the vif and close our side, so the toolstack can finish.
+ */
+static void nf_disconnect(struct netfront_data *nf)
+{
+	int state;
+
+	nf->connected = false;
+	net_eth_carrier_off(nf->iface);
+
+	(void)xs_write_int("state", XB_CLOSED);
+
+	/* Give the backend time to unmap our pages before they are reused */
+	for (int i = 0; i < 100; i++) {
+		state = backend_state(nf);
+		if ((state < 0) || (state == XB_CLOSED)) {
+			break;
+		}
+		k_msleep(100);
+	}
+
+	mask_event_channel(nf->port);
+	unbind_event_channel(nf->port);
+	(void)evtchn_close(nf->port);
+
+	LOG_INF("disconnected");
 }
 
 static void nf_thread_fn(void *p1, void *p2, void *p3)
@@ -421,29 +478,52 @@ static void nf_thread_fn(void *p1, void *p2, void *p3)
 	ARG_UNUSED(p2);
 	ARG_UNUSED(p3);
 
-	ret = nf_connect(nf);
-	if (ret != 0) {
-		LOG_ERR("vif not connected: %d", ret);
-		return;
-	}
-
-	/* The stack keeps a copy of the link address: set the vif MAC */
-	ret = net_if_set_link_addr(nf->iface, nf->mac, sizeof(nf->mac), NET_LINK_ETHERNET);
-	if (ret != 0) {
-		LOG_WRN("could not set MAC: %d", ret);
-	} else {
-		LOG_INF("link address %02x:%02x:%02x:%02x:%02x:%02x", nf->mac[0], nf->mac[1],
-			nf->mac[2], nf->mac[3], nf->mac[4], nf->mac[5]);
-	}
-
-	nf->connected = true;
-	net_eth_carrier_on(nf->iface);
-
 	while (true) {
-		/* Events wake us up; the timeout also covers a missed one */
-		(void)k_sem_take(&nf->event, K_MSEC(100));
-		tx_process(nf);
-		rx_process(nf);
+		int bad_states = 0;
+
+		ret = nf_connect(nf);
+		if (ret != 0) {
+			LOG_WRN("vif not connected (%d), retrying", ret);
+			k_msleep(1000);
+			continue;
+		}
+
+		/* The stack keeps a copy of the link address: set the vif MAC */
+		ret = net_if_set_link_addr(nf->iface, nf->mac, sizeof(nf->mac),
+					   NET_LINK_ETHERNET);
+		if (ret != 0) {
+			LOG_WRN("could not set MAC: %d", ret);
+		} else {
+			LOG_INF("link address %02x:%02x:%02x:%02x:%02x:%02x", nf->mac[0],
+				nf->mac[1], nf->mac[2], nf->mac[3], nf->mac[4], nf->mac[5]);
+		}
+
+		nf->connected = true;
+		net_eth_carrier_on(nf->iface);
+
+		for (uint32_t tick = 1U;; tick++) {
+			/* Events wake us up; the timeout also covers a missed one */
+			(void)k_sem_take(&nf->event, K_MSEC(100));
+			tx_process(nf);
+			rx_process(nf);
+
+			/* Every 500 ms: is the backend still connected? */
+			if ((tick % 5U) != 0U) {
+				continue;
+			}
+			ret = backend_state(nf);
+			if (ret == XB_CONNECTED) {
+				bad_states = 0;
+				continue;
+			}
+			/* Two reads in a row, so one failed xenstore read is not enough */
+			if (++bad_states >= 2) {
+				LOG_WRN("backend state %d, reconnecting", ret);
+				break;
+			}
+		}
+
+		nf_disconnect(nf);
 	}
 }
 
@@ -479,6 +559,7 @@ static int nf_init(const struct device *dev)
 	struct netfront_data *nf = dev->data;
 
 	k_sem_init(&nf->event, 0, 1);
+	k_sem_init(&nf->tx_slots, 0, NF_TX_BUFS);
 	k_mutex_init(&nf->tx_lock);
 	return 0;
 }
