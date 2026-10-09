@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  NXP RGPIO controller passed through by Xen to a Zephyr DomU (xenvm). Pin
+  mux and clocks are set up outside the DomU (System Manager, Dom0), so the
+  driver needs neither SCMI nor pinctrl. No interrupts.
+
+compatible: "epp,xen-rgpio"
+
+include: [gpio-controller.yaml, base.yaml]
+
+properties:
+  reg:
+    required: true
+
+  "#gpio-cells":
+    const: 2
+
+gpio-cells:
+  - pin
+  - flags

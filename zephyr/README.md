@@ -210,3 +210,50 @@ other cryptography.
 Tested on hardware: DHCP and ping from the LAN to the Zephyr DomU, next to
 the Linux DomU on the same port and Zephyr on the M7; four detach/attach
 cycles in a row, each reconnecting with a new MAC and address.
+
+## GPIO passthrough to the Zephyr DomU (RGB LED)
+
+With `EPP_XEN_ZEPHYR_PASSTHROUGH="gpio2"` in [board.conf](../board.conf), Xen
+gives the GPIO2 controller to the Zephyr DomU, mapped at its physical address
+`0x43810000`. On it are the RGB LED D19 (green GPIO_IO04, blue GPIO_IO12, red
+GPIO_IO13, active high) and the GPIO_IOxx pins of the 40-pin header. Dom0 no
+longer sees GPIO2 (`status = "disabled"` in its device tree).
+
+The other parts stay outside the DomU:
+
+| What | Where |
+|---|---|
+| Pin mux of the LED pads to GPIO | overlay `epp-zephyr-gpio2-pins.dtbo`, applied to the Dom0 device tree; the System Manager sets the pads when Dom0 boots |
+| "PWM/GPIO select" of the board (LED instead of PWM) | gpio-hog in the FRDM device tree, set by Dom0 |
+| Clock and power of GPIO2 | on from boot |
+| Mapping into the DomU | partial device tree `zephyr-domu-pt.dtb` (from `epp-zephyr-gpio2-pt.dts`), loaded by `boot.scr` as `multiboot,device-tree` module of `/chosen/domU2` |
+
+The upstream NXP GPIO driver needs SCMI and pinctrl, which a DomU does not
+have, so this module has a minimal RGPIO driver (`CONFIG_EPP_XEN_RGPIO`,
+compatible `epp,xen-rgpio`): inputs and outputs, no interrupts (the GPIO2
+interrupt is not passed through), no pull or open-drain flags (pad settings
+belong to the pin mux). The secure-only registers PCNS/PCNP must not be
+accessed from the DomU; reading them aborts.
+
+[samples/xen_led_passthrough](samples/xen_led_passthrough) cycles D19 through
+red, green, blue, white and off, one second each. Its `app.overlay` holds the
+`gpio2` node and the LEDs:
+
+```bash
+west build -p -b xenvm/xenvm/gicv3 $HOME/dev/epp-v2/zephyr/samples/xen_led_passthrough -- \
+    -DEXTRA_ZEPHYR_MODULES=$HOME/dev/epp-v2/zephyr \
+    -DEXTRA_DTC_OVERLAY_FILE=$HOME/dev/epp-v2/zephyr/xen/xenvm-dom0less.overlay \
+    -DEXTRA_CONF_FILE=$HOME/dev/epp-v2/zephyr/xen/xenvm-dom0less.conf
+```
+
+```
+<inf> epp_xen_rgpio: RGPIO at 0x43810000: VERID 0x... PARAM 0x...
+xen_led: [0] D19 red (PDIR 0x00002000: IO13 1 IO04 0 IO12 0)
+```
+
+Switching `EPP_XEN_ZEPHYR_PASSTHROUGH` needs a full build and flash (boot
+script, overlays and the boot partition change); replacing only
+`zephyr-domu.bin` is enough when the Zephyr application changes.
+
+Tested on hardware: the LED cycles its colours from the Zephyr DomU while
+Dom0 and the Linux DomU run.

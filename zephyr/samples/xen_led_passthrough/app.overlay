@@ -1,0 +1,40 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * GPIO2 of the i.MX95, passed through by Xen to this DomU at its physical
+ * address (EPP_XEN_ZEPHYR_PASSTHROUGH="gpio2" in epp-v2 board.conf), and the
+ * FRDM-IMX95 RGB LED D19 on it: green GPIO_IO04, blue GPIO_IO12, red
+ * GPIO_IO13 (active high).
+ */
+
+#include <zephyr/dt-bindings/gpio/gpio.h>
+
+/ {
+	gpio2: gpio@43810000 {
+		compatible = "epp,xen-rgpio";
+		reg = <0x00 0x43810000 0x00 0x1000>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		ngpios = <32>;
+		status = "okay";
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led_red: led_red {
+			gpios = <&gpio2 13 GPIO_ACTIVE_HIGH>;
+			label = "D19 red";
+		};
+
+		led_green: led_green {
+			gpios = <&gpio2 4 GPIO_ACTIVE_HIGH>;
+			label = "D19 green";
+		};
+
+		led_blue: led_blue {
+			gpios = <&gpio2 12 GPIO_ACTIVE_HIGH>;
+			label = "D19 blue";
+		};
+	};
+};

@@ -48,4 +48,13 @@ source "subsys/logging/Kconfig.template.log_config"
 
 endif # EPP_XEN_NETFRONT
 
+config EPP_XEN_RGPIO
+	bool "NXP RGPIO passed through to a Xen DomU"
+	default y
+	depends on GPIO && DT_HAS_EPP_XEN_RGPIO_ENABLED
+	help
+	  Minimal driver for an RGPIO controller Xen passes through to the DomU
+	  (compatible "epp,xen-rgpio"): no SCMI and no pinctrl, the System
+	  Manager and Dom0 set those up. No interrupts.
+
 endmenu
