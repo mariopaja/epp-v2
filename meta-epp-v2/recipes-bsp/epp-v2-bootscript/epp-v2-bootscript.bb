@@ -25,12 +25,14 @@ EPP_XEN_ZEPHYR = "${@'yes' if d.getVar('EPP_XEN_ZEPHYR_IMAGE_PATH') else 'no'}"
 EPP_XEN_ZEPHYR_MEM_KB = "${@hex(int(d.getVar('EPP_XEN_ZEPHYR_MEM')) * 1024)}"
 # Dedicated core for the Zephyr DomU: CPU node of core N is /cpus/cpu@N00
 EPP_XEN_ZEPHYR_CPU_NODE = "${@('/cpus/cpu@%s00' % d.getVar('EPP_XEN_ZEPHYR_CPU')) if d.getVar('EPP_XEN_ZEPHYR_CPU') else ''}"
+# Host device tree node passed through to the Zephyr DomU
+EPP_XEN_ZEPHYR_PT_PATH = "${@{'gpio2': '/soc/gpio@43810000'}.get(d.getVar('EPP_XEN_ZEPHYR_PASSTHROUGH'), '')}"
 
 # Rebuild the script when the board settings change
 do_compile[vardeps] += "EPP_OVERLAYS EPP_FDTFILE EPP_XEN EPP_DOM0_MEM EPP_DOM0_VCPUS \
                         EPP_XEN_LINUX_MEM EPP_XEN_LINUX_VCPUS \
                         EPP_XEN_ZEPHYR EPP_XEN_ZEPHYR_MEM EPP_XEN_ZEPHYR_VCPUS \
-                        EPP_XEN_ZEPHYR_CPU_NODE"
+                        EPP_XEN_ZEPHYR_CPU_NODE EPP_XEN_ZEPHYR_PT_PATH"
 
 do_compile() {
     sed -e 's|@@EPP_OVERLAYS@@|${EPP_OVERLAYS}|g' \
@@ -46,6 +48,7 @@ do_compile() {
         -e 's|@@EPP_XEN_ZEPHYR_MEM@@|${EPP_XEN_ZEPHYR_MEM}|g' \
         -e 's|@@EPP_XEN_ZEPHYR_VCPUS@@|${EPP_XEN_ZEPHYR_VCPUS}|g' \
         -e 's|@@EPP_XEN_ZEPHYR_CPU_NODE@@|${EPP_XEN_ZEPHYR_CPU_NODE}|g' \
+        -e 's|@@EPP_XEN_ZEPHYR_PT_PATH@@|${EPP_XEN_ZEPHYR_PT_PATH}|g' \
         ${S}/boot.cmd.in > ${B}/boot.cmd
     mkimage -A arm64 -O linux -T script -C none -n "epp-v2 boot script" \
         -d ${B}/boot.cmd ${B}/boot.scr

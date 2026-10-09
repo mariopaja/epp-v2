@@ -56,6 +56,13 @@ fi
 if test -z "${epp_zephyr_domu}"; then
     setenv epp_zephyr_domu "@@EPP_XEN_ZEPHYR@@"
 fi
+if test -z "${epp_zephyr_pt_path}"; then
+    setenv epp_zephyr_pt_path "@@EPP_XEN_ZEPHYR_PT_PATH@@"
+fi
+# Partial device tree for the Zephyr DomU passthrough, after its kernel
+if test -z "${epp_zephyr_pt_addr}"; then
+    setenv epp_zephyr_pt_addr 0xa9000000
+fi
 if test -z "${epp_zephyr_cpu_node}"; then
     setenv epp_zephyr_cpu_node "@@EPP_XEN_ZEPHYR_CPU_NODE@@"
 fi
@@ -95,6 +102,14 @@ if load ${epp_devtype} ${epp_devpart} ${epp_kernel_addr} ${image}; then
     if test "${epp_xen}" = "dom0less" && test "${epp_zephyr_domu}" = "yes"; then
         if load ${epp_devtype} ${epp_devpart} ${epp_zephyr_addr} zephyr-domu.bin; then
             setenv epp_zephyr_size ${filesize}
+            if test -n "${epp_zephyr_pt_path}"; then
+                if load ${epp_devtype} ${epp_devpart} ${epp_zephyr_pt_addr} zephyr-domu-pt.dtb; then
+                    setenv epp_zephyr_pt_size ${filesize}
+                else
+                    echo "epp-v2: WARNING zephyr-domu-pt.dtb not found, no passthrough"
+                    setenv epp_zephyr_pt_path ""
+                fi
+            fi
         else
             echo "epp-v2: WARNING zephyr-domu.bin not found, no Zephyr DomU"
             setenv epp_zephyr_domu no
@@ -165,6 +180,16 @@ if load ${epp_devtype} ${epp_devpart} ${epp_kernel_addr} ${image}; then
             fdt mknode /chosen/domU2 module@0
             fdt set /chosen/domU2/module@0 compatible "multiboot,kernel" "multiboot,module"
             fdt set /chosen/domU2/module@0 reg <0x0 ${epp_zephyr_addr} 0x0 0x${epp_zephyr_size}>
+            # Hardware passthrough: Xen takes the device away from Dom0
+            # (status disabled there) and maps it into this domain as
+            # described by the partial device tree
+            if test -n "${epp_zephyr_pt_path}"; then
+                echo "epp-v2: passing ${epp_zephyr_pt_path} through to the Zephyr DomU"
+                fdt set ${epp_zephyr_pt_path} xen,passthrough
+                fdt mknode /chosen/domU2 module@1
+                fdt set /chosen/domU2/module@1 compatible "multiboot,device-tree" "multiboot,module"
+                fdt set /chosen/domU2/module@1 reg <0x0 ${epp_zephyr_pt_addr} 0x0 0x${epp_zephyr_pt_size}>
+            fi
         fi
         if test "${epp_xen}" = "dom0less"; then
             # DomU created by Xen at boot. Console on the emulated PL011
