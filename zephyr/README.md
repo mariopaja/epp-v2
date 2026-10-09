@@ -169,7 +169,7 @@ LAN -- eth0 -- Dom0: xenbr0 --+-- Dom0 (epp-v2-dom0)
 | Kconfig | Function |
 |---|---|
 | `CONFIG_EPP_XEN_XENSTORE` | xenstore client (`epp/xen/xenstore.h`: `epp_xs_init`, `epp_xs_read`, `epp_xs_write`, `epp_xs_directory`). Waits until Dom0 (`init-dom0less`) has set up the domain's xenstore |
-| `CONFIG_EPP_XEN_NETFRONT` | Ethernet interface on `device/vif/0`: waits for the vif Dom0 attaches (`xl network-attach 2 bridge=xenbr0 type=vif` in `epp-v2-dom0less.service`), grants the rings and buffers to Dom0 and connects. `_RX_BUFS` / `_TX_BUFS` set the number of 4 KiB buffer pages (default 32 / 16) |
+| `CONFIG_EPP_XEN_NETFRONT` | Ethernet interface on `device/vif/0`: waits for the vif Dom0 attaches (`xl network-attach zephyr bridge=xenbr0 type=vif` in `epp-v2-dom0less-setup`), grants the rings and buffers to Dom0 and connects. `_RX_BUFS` / `_TX_BUFS` set the number of 4 KiB buffer pages (default 32 / 16) |
 
 Build with the module (`EXTRA_ZEPHYR_MODULES`), for example the sample
 [samples/xen_netfront](samples/xen_netfront), which gets an address by DHCP
@@ -193,9 +193,9 @@ west build -p -b xenvm/xenvm/gicv3 $HOME/dev/epp-v2/zephyr/samples/xen_netfront 
 xenstore nodes.
 
 The driver reconnects by itself: when the backend leaves Connected (for
-example `xl network-detach 2 0` in Dom0) it switches the carrier off, closes
+example `xl network-detach zephyr 0` in Dom0) it switches the carrier off, closes
 its side so `xl` finishes at once, and waits for a new vif
-(`xl network-attach 2 bridge=xenbr0 type=vif`), which may come with a new MAC;
+(`xl network-attach zephyr bridge=xenbr0 type=vif`), which may come with a new MAC;
 DHCP then gets a new address. The ring and buffer pages are granted once and
 the grant references reused, because Zephyr's `gnttab_end_access()` has its
 check inverted (it frees grants that are still in use and keeps released

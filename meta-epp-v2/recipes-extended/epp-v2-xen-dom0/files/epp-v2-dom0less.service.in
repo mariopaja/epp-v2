@@ -1,6 +1,7 @@
-# --xen=dom0less: Xen started the epp-v2 DomU (domid 1) and, with
-# EPP_XEN_ZEPHYR_IMAGE, the Zephyr DomU (domid 2) at boot, before Dom0. Set up
-# their xenstore, then give them their disk and network from Dom0.
+# --xen=dom0less: Xen started the epp-v2 Linux DomU and, with
+# EPP_XEN_ZEPHYR_IMAGE, the Zephyr DomU at boot, before Dom0. Set up their
+# xenstore, name them and give them their disk and network from Dom0
+# (epp-v2-dom0less-setup, domain order from epp.domus= on the command line).
 [Unit]
 Description=epp-v2: connect the dom0less DomU (xenstore, disk, network)
 Requires=xenstored.service
@@ -10,12 +11,7 @@ After=xenstored.service xenconsoled.service xen-init-dom0.service systemd-networ
 Type=oneshot
 RemainAfterExit=yes
 ExecStartPre=/usr/libexec/epp-v2-wait-xenbr0
-ExecStart=/usr/lib/xen/bin/init-dom0less
-ExecStart=/usr/sbin/xl block-attach 1 phy:@@EPP_DOMU_DISK@@,xvda,w
-# type=vif: otherwise libxl treats the dom0less domain's NIC as emulated
-# and asks for a device model
-ExecStart=/usr/sbin/xl network-attach 1 bridge=xenbr0 type=vif
-@@EPP_ZEPHYR_NET@@
+ExecStart=/usr/libexec/epp-v2-dom0less-setup
 
 [Install]
 WantedBy=multi-user.target

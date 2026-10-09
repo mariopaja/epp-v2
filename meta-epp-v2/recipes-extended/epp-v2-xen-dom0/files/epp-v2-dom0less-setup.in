@@ -1,0 +1,43 @@
+#!/bin/sh
+# --xen=dom0less: set up the DomUs Xen created at boot from the device tree.
+# boot.scr passes them in Xen's numbering order on the Dom0 kernel command
+# line (epp.domus=linux,zephyr: domain 1 is the Linux DomU, 2 Zephyr). Set up
+# their xenstore, give them names and attach their PV devices by name.
+
+rc=0
+
+/usr/lib/xen/bin/init-dom0less || exit 1
+
+domus=$(sed -n 's/.*epp\.domus=\([^ ]*\).*/\1/p' /proc/cmdline)
+if [ -z "$domus" ]; then
+    echo "epp-v2: no epp.domus= on the kernel command line, assuming domain 1 = linux" >&2
+    domus=linux
+fi
+
+id=1
+for role in $(echo "$domus" | tr ',' ' '); do
+    case "$role" in
+        linux)  name="@@EPP_LINUX_NAME@@" ;;
+        zephyr) name="zephyr" ;;
+        *)      echo "epp-v2: unknown DomU role '$role' (domain $id)" >&2
+                id=$((id + 1)); rc=1; continue ;;
+    esac
+
+    echo "epp-v2: domain $id: $role -> $name"
+    xl rename "$id" "$name" || rc=1
+
+    case "$role" in
+        linux)
+            xl block-attach "$name" "phy:@@EPP_DOMU_DISK@@,xvda,w" || rc=1
+            # type=vif: otherwise libxl treats the dom0less NIC as emulated
+            # and asks for a device model
+            xl network-attach "$name" bridge=xenbr0 type=vif || rc=1
+            ;;
+        zephyr)
+            xl network-attach "$name" bridge=xenbr0 type=vif || rc=1
+            ;;
+    esac
+    id=$((id + 1))
+done
+
+exit $rc

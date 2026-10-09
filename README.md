@@ -107,6 +107,12 @@ SKIP_SYNC=1 ./docker-run.sh --xen  # rebuild without repo sync
   `CONFIG_BOOT_TIME_CPUPOOLS` and `CONFIG_SCHED_NULL`); the other cores form
   Pool-0 (credit2) for Dom0 and the Linux DomU. Check in Dom0 with
   `xl cpupool-list` and `xl vcpu-list`.
+- Domain names: `boot.scr` passes the dom0less DomUs to Dom0 in Xen's
+  numbering order (`epp.domus=linux,zephyr` on the Dom0 command line);
+  `epp-v2-dom0less.service` (`/usr/libexec/epp-v2-dom0less-setup`) sets up
+  their xenstore, renames them to `EPP_HOSTNAME` (`epp-v2`) and `zephyr` and
+  attaches their devices by name, so `xl list`, `xl network-list zephyr`
+  etc. work with names. Its log: `journalctl -u epp-v2-dom0less`.
 - PV devices of dom0less DomUs need the patched Xen tools in
   `meta-epp-v2/recipes-extended/xen/` (`init-dom0less` and `xl
   block-attach` / `network-attach` failed with NXP's version).

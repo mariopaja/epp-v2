@@ -15,6 +15,7 @@ SRC_URI = " \
     file://epp-v2-wait-xenbr0 \
     file://xendomains-epp-v2.conf \
     file://epp-v2-dom0less.service.in \
+    file://epp-v2-dom0less-setup.in \
 "
 
 S = "${UNPACKDIR}"
@@ -27,11 +28,11 @@ EPP_DOMU_DISK ?= "/dev/mmcblk1p3"
 SYSTEMD_SERVICE:${PN} = "epp-v2-dom0less.service"
 SYSTEMD_AUTO_ENABLE:${PN} = "${@'enable' if d.getVar('EPP_XEN') == 'dom0less' else 'disable'}"
 
-# Zephyr DomU (domid 2): network card on xenbr0 for its netfront
-EPP_ZEPHYR_NET = "${@'ExecStart=-/usr/sbin/xl network-attach 2 bridge=xenbr0 type=vif' if d.getVar('EPP_XEN_ZEPHYR_IMAGE_PATH') else ''}"
+# Name of the Linux DomU in xl (xl list, xl console <name>)
+EPP_LINUX_NAME = "${EPP_HOSTNAME}"
 
 do_install[vardeps] += "EPP_XEN EPP_XEN_LINUX_MEM EPP_XEN_LINUX_VCPUS EPP_XEN_UPLINK EPP_DOMU_DISK \
-                        EPP_ZEPHYR_NET"
+                        EPP_LINUX_NAME"
 
 do_install() {
     epp_subst() {
@@ -39,7 +40,7 @@ do_install() {
             -e 's|@@EPP_XEN_LINUX_MEM@@|${EPP_XEN_LINUX_MEM}|g' \
             -e 's|@@EPP_XEN_LINUX_VCPUS@@|${EPP_XEN_LINUX_VCPUS}|g' \
             -e 's|@@EPP_DOMU_DISK@@|${EPP_DOMU_DISK}|g' \
-            -e 's|@@EPP_ZEPHYR_NET@@|${EPP_ZEPHYR_NET}|g' "$1"
+            -e 's|@@EPP_LINUX_NAME@@|${EPP_LINUX_NAME}|g' "$1"
     }
 
     install -d ${D}${sysconfdir}/systemd/network
@@ -52,6 +53,8 @@ do_install() {
 
     install -d ${D}${libexecdir}
     install -m 0755 ${S}/epp-v2-wait-xenbr0 ${D}${libexecdir}/
+    epp_subst ${S}/epp-v2-dom0less-setup.in > ${D}${libexecdir}/epp-v2-dom0less-setup
+    chmod 0755 ${D}${libexecdir}/epp-v2-dom0less-setup
 
     # DomU config, also usable by hand: xl create /etc/xen/epp-v2.cfg
     install -d ${D}${sysconfdir}/xen/auto

@@ -111,12 +111,23 @@ if load ${epp_devtype} ${epp_devpart} ${epp_kernel_addr} ${image}; then
                 echo "epp-v2: WARNING overlay ${ov} not found"
             fi
         done
+        # dom0less DomUs in Xen's numbering order (domain 1, 2, ...), passed to
+        # Dom0 as epp.domus= for epp-v2-dom0less-setup, which names them and
+        # attaches their devices. Must match the node order created below:
+        # the Linux DomU node is created last, so it is domain 1.
+        setenv epp_domus ""
+        if test "${epp_xen}" = "dom0less"; then
+            setenv epp_domus "epp.domus=linux"
+            if test "${epp_zephyr_domu}" = "yes"; then
+                setenv epp_domus "epp.domus=linux,zephyr"
+            fi
+        fi
         if test "${epp_xen}" != "no"; then
             # Pass the kernel to Xen as Dom0 module; Xen owns the SMMU
             fdt mknode /chosen module@0
             fdt set /chosen/module@0 compatible "xen,linux-zimage" "xen,multiboot-module"
             fdt set /chosen/module@0 reg <0x00000000 ${epp_kernel_addr} 0x00000000 0x${epp_kernel_size}>
-            fdt set /chosen/module@0 bootargs "${bootargs} ${xenlinux_bootargs}"
+            fdt set /chosen/module@0 bootargs "${bootargs} ${xenlinux_bootargs} ${epp_domus}"
             fdt set /soc/bus@49000000/iommu@490d0000 status disabled
         fi
         # Xen numbers dom0less domains in /chosen order, and fdt mknode puts
