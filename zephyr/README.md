@@ -219,6 +219,21 @@ gives the GPIO2 controller to the Zephyr DomU, mapped at its physical address
 GPIO_IO13, active high) and the GPIO_IOxx pins of the 40-pin header. Dom0 no
 longer sees GPIO2 (`status = "disabled"` in its device tree).
 
+Nothing is passed through automatically, and Xen hands over whole register
+blocks, not single pins: the DomU gets all 32 pins of GPIO2. Three things
+have to match:
+
+1. `EPP_XEN_ZEPHYR_PASSTHROUGH="gpio2"`: Xen takes GPIO2 from Dom0 and maps
+   it into the DomU.
+2. The pin mux: only pins muxed to GPIO in
+   `meta-epp-v2/recipes-bsp/epp-v2-overlays/files/epp-zephyr-gpio2-pins.dtso`
+   work. It has the three LED pads; to use other GPIO2 pins of the 40-pin
+   header, add their `IMX95_PAD_GPIO_IOxx__GPIO2_IO_BITxx` entries there and
+   rebuild the image.
+3. The Zephyr device tree: Zephyr does not discover the device from Xen, so
+   the application needs the `gpio2` node (`compatible = "epp,xen-rgpio"`,
+   as in the samples' `app.overlay`) and its own LED or pin nodes.
+
 The other parts stay outside the DomU:
 
 | What | Where |
@@ -249,6 +264,14 @@ west build -p -b xenvm/xenvm/gicv3 $HOME/dev/epp-v2/zephyr/samples/xen_led_passt
 ```
 <inf> epp_xen_rgpio: RGPIO at 0x43810000: VERID 0x... PARAM 0x...
 xen_led: [0] D19 red (PDIR 0x00002000: IO13 1 IO04 0 IO12 0)
+```
+
+[samples/xen_led_netfront](samples/xen_led_netfront) combines both: the
+LED cycles as above, and the netfront interface gets an address by DHCP
+(same build command, other sample directory). Every 5 s:
+
+```
+xen_led_netfront: carrier on, mac 00:16:3e:.., ipv4 10.10.193.., D19 cycling
 ```
 
 Switching `EPP_XEN_ZEPHYR_PASSTHROUGH` needs a full build and flash (boot
