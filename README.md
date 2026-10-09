@@ -31,7 +31,8 @@ epp-v2/
 ├── yocto-builds/         # BSP sources, build dir, caches (gitignored)
 ├── m7/                 # Cortex-M7 firmware for the boot container (EPP_M7_IMAGE)
 ├── xen/                # Zephyr image for the Xen dom0less DomU (EPP_XEN_ZEPHYR_IMAGE)
-├── zephyr/             # Zephyr board frdm_imx95 (M7 / A55), see zephyr/README.md
+├── zephyr/             # Zephyr module: board frdm_imx95 (M7 / A55), Xen xenstore +
+│                         # netfront drivers for the Zephyr DomU; see zephyr/README.md
 ├── scripts/
 │   └── yocto-build.sh    # Runs inside the container: repo sync, setup, bitbake
 └── meta-epp-v2/          # Custom Yocto layer
@@ -39,6 +40,7 @@ epp-v2/
     ├── recipes-core/images/epp-v2-image.bb       # the epp-v2 Linux
     ├── recipes-core/images/epp-v2-dom0-image.bb  # minimal Xen Dom0 (--xen=domu / dom0less)
     ├── recipes-extended/epp-v2-xen-dom0/         # Dom0: xenbr0, backends, DomU start
+    ├── recipes-extended/xen/                     # xen-tools fixes for dom0less PV devices
     ├── files/wic/epp-v2-xen-domu.wks.in          # SD layout with the DomU partition
     ├── recipes-core/base-files/          # hostname
     ├── recipes-connectivity/openssh/     # root SSH login
@@ -97,8 +99,12 @@ SKIP_SYNC=1 ./docker-run.sh --xen  # rebuild without repo sync
 - `dom0less` with `EPP_XEN_ZEPHYR_IMAGE` set: a second DomU runs Zephyr
   (`/chosen/domU2`, image `zephyr-domu.bin` on the boot partition,
   `EPP_XEN_ZEPHYR_VCPUS` / `EPP_XEN_ZEPHYR_MEM`, default 1 vCPU / 16 MB). It
-  has no disk, network or xenstore; see [zephyr/README.md](zephyr/README.md)
-  for building it.
+  gets xenstore and a vif on `xenbr0` (`vif2.0`), so with the Zephyr Xen
+  netfront driver it shares the Ethernet port with the Linux DomU and gets
+  its own DHCP address; no disk. See [zephyr/README.md](zephyr/README.md).
+- PV devices of dom0less DomUs need the patched Xen tools in
+  `meta-epp-v2/recipes-extended/xen/` (`init-dom0less` and `xl
+  block-attach` / `network-attach` failed with NXP's version).
 - Consoles: `domu`: `xl console epp-v2` in Dom0. `dom0less`: the DomUs use the
   emulated PL011 (`ttyAMA0` in Linux); press Ctrl-a three times on the serial
   console to move the input on: DOM0, DOM1 (epp-v2 Linux), DOM2 (Zephyr), Xen.

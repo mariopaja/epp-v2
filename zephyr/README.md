@@ -125,9 +125,9 @@ machine Xen provides, so it is built for Zephyr's generic
 `xenvm/xenvm/gicv3` board (guest RAM at `0x40000000`, GICv3). For a dom0less
 DomU on this board, [xen/xenvm-dom0less.overlay](xen/xenvm-dom0less.overlay)
 and [xen/xenvm-dom0less.conf](xen/xenvm-dom0less.conf) switch the console to
-the PL011 Xen emulates for the domain (`0x22000000`; the Xen PV console of
-`xenvm` needs xenstore, which a dom0less guest without `xen,enhanced` does not
-have) and add the arm64 image header Xen needs to load the kernel:
+the PL011 Xen emulates for the domain (`0x22000000`) instead of the Xen PV
+console of `xenvm`, and add the arm64 image header Xen needs to load the
+kernel:
 
 ```bash
 west build -p -b xenvm/xenvm/gicv3 samples/synchronization -- \
@@ -139,9 +139,60 @@ cp build/zephyr/zephyr.bin $HOME/dev/epp-v2/xen/zephyr.bin
 Then set `EPP_XEN_ZEPHYR_IMAGE="xen/zephyr.bin"` in
 [board.conf](../board.conf), build with `./docker-run.sh --xen` and flash.
 `boot.scr` creates the domain `/chosen/domU2` (`EPP_XEN_ZEPHYR_VCPUS`,
-`EPP_XEN_ZEPHYR_MEM`; the memory must cover the 16 MB RAM of `xenvm`). Its
+`EPP_XEN_ZEPHYR_MEM`; the memory must cover the 16 MB RAM of `xenvm`) with
+`xen,enhanced`, so the domain gets xenstore once Dom0 has booted. Its
 output appears on the Xen serial console (`ttyACM0`); Ctrl-a three times
 moves the input to DOM2.
 
-Tested on hardware: `samples/synchronization` as DomU2 next to the epp-v2
-Linux DomU, with Zephyr on the M7 at the same time.
+To replace only the Zephyr DomU on a running board, copy the new
+`zephyr.bin` to the boot partition as `zephyr-domu.bin` (from Dom0:
+`mount /dev/mmcblk1p1 /mnt`) and restart the board.
+
+## Network for the Zephyr DomU (Xen netfront)
+
+Zephyr has no Xen PV drivers of its own, so this directory is also a Zephyr
+module with a xenstore client and a Xen network frontend (netfront). The
+Zephyr DomU then shares the board's Ethernet port with Dom0 and the Linux
+DomU through the bridge `xenbr0` in Dom0, with its own MAC (`00:16:3e:...`,
+from Xen) and an address from DHCP:
+
+```
+LAN -- eth0 -- Dom0: xenbr0 --+-- Dom0 (epp-v2-dom0)
+                              +-- vif1.0 -- Linux DomU (epp-v2)
+                              +-- vif2.0 -- Zephyr DomU (netfront)
+```
+
+| Kconfig | Function |
+|---|---|
+| `CONFIG_EPP_XEN_XENSTORE` | xenstore client (`epp/xen/xenstore.h`: `epp_xs_init`, `epp_xs_read`, `epp_xs_write`, `epp_xs_directory`). Waits until Dom0 (`init-dom0less`) has set up the domain's xenstore |
+| `CONFIG_EPP_XEN_NETFRONT` | Ethernet interface on `device/vif/0`: waits for the vif Dom0 attaches (`xl network-attach 2 bridge=xenbr0 type=vif` in `epp-v2-dom0less.service`), grants the rings and buffers to Dom0 and connects. `_RX_BUFS` / `_TX_BUFS` set the number of 4 KiB buffer pages (default 32 / 16) |
+
+Build with the module (`EXTRA_ZEPHYR_MODULES`), for example the sample
+[samples/xen_netfront](samples/xen_netfront), which gets an address by DHCP
+and prints the state every 5 s:
+
+```bash
+west build -p -b xenvm/xenvm/gicv3 $HOME/dev/epp-v2/zephyr/samples/xen_netfront -- \
+    -DEXTRA_ZEPHYR_MODULES=$HOME/dev/epp-v2/zephyr \
+    -DEXTRA_DTC_OVERLAY_FILE=$HOME/dev/epp-v2/zephyr/xen/xenvm-dom0less.overlay \
+    -DEXTRA_CONF_FILE=$HOME/dev/epp-v2/zephyr/xen/xenvm-dom0less.conf
+```
+
+```
+<inf> epp_xenstore: xenstore connected (pfn 0x39001, evtchn 1)
+<inf> epp_netfront: vif backend /local/domain/0/backend/vif/2/0 (dom 0), mac 00:16:3e:..
+<inf> epp_netfront: connected: tx-ring-ref 8, rx-ring-ref 9, evtchn 2
+<inf> net_dhcpv4: Received: 10.10.193.193
+```
+
+[samples/xen_xenstore](samples/xen_xenstore) only reads the domain's own
+xenstore nodes.
+
+Limitations: one queue, one page per packet (no scatter-gather, no
+checksum/GSO offloads, MTU 1500), receive in rx-copy mode, no reconnect if
+the backend goes away. `xenvm` has no entropy source; the sample uses
+`CONFIG_TEST_RANDOM_GENERATOR`, which is fine for DHCP but not for TLS or
+other cryptography.
+
+Tested on hardware: DHCP and ping from the LAN to the Zephyr DomU, next to
+the Linux DomU on the same port and Zephyr on the M7.
