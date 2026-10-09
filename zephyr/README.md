@@ -279,4 +279,5 @@ script, overlays and the boot partition change); replacing only
 `zephyr-domu.bin` is enough when the Zephyr application changes.
 
 Tested on hardware: the LED cycles its colours from the Zephyr DomU while
-Dom0 and the Linux DomU run.
+Dom0 and the Linux DomU run; with `xen_led_netfront` the Zephyr DomU at the
+same time gets an address by DHCP and answers ping from the LAN.
