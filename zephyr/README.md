@@ -285,6 +285,7 @@ changed):
 | [xen_led_passthrough](samples/xen_led_passthrough) | `gpio2` | cycles D19 red, green, blue, white, off, one second each |
 | [xen_led_netfront](samples/xen_led_netfront) | `gpio2` | the same, plus netfront with DHCP |
 | [xen_i2c_passthrough](samples/xen_i2c_passthrough) | `lpi2c4` | every 10 s: scans the bus, reads the IT6263 chip IDs, writes and reads back a PCA9632 register |
+| [xen_led_i2c_netfront](samples/xen_led_i2c_netfront) | `gpio2 lpi2c4` | all together: D19 cycles every second, netfront with DHCP, every 10 s the network state and the I2C checks |
 
 ```bash
 west build -p -b xenvm/xenvm/gicv3 $HOME/dev/epp-v2/zephyr/samples/xen_i2c_passthrough -- \
@@ -301,6 +302,14 @@ xen_i2c: IT6263 LVDS (0x33): vendor 15 ca device 61 62 OK
 xen_i2c: PCA9632 (0x62): MODE1 0x10 MODE2 0x01, PWM0 wrote 0x5a read 0x5a OK
 ```
 
+`xen_led_i2c_netfront` prints every 10 s:
+
+```
+app: [4] LED cycling
+app: net: carrier on, mac 00:16:3e:63:b3:1e, ipv4 10.10.193.43
+app: i2c: 3 devices, IT6263 ID OK, PCA9632 write/read 0x5a OK
+```
+
 The Zephyr DomU's output is also in Xen's console log, so it can be read
 from Dom0 without the serial console: `xl dmesg | grep DOM2`.
 
@@ -312,5 +321,6 @@ Zephyr application changes.
 
 Tested on hardware: `xen_led_passthrough` and `xen_led_netfront` (LED cycles,
 DHCP and ping from the LAN) with `gpio2`; `xen_i2c_passthrough` with
-`gpio2 lpi2c4` (all three devices found, IDs and register readback correct),
-each while Dom0 and the Linux DomU run.
+`gpio2 lpi2c4` (all three devices found, IDs and register readback correct);
+`xen_led_i2c_netfront` with `gpio2 lpi2c4` (I2C checks pass, DHCP and ping
+from the LAN), each while Dom0 and the Linux DomU run.

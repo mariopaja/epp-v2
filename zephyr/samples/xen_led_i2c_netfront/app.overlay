@@ -1,0 +1,51 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Devices passed through by Xen to this DomU at their physical addresses
+ * (EPP_XEN_ZEPHYR_PASSTHROUGH="gpio2 lpi2c4" in epp-v2 board.conf):
+ * GPIO2 with the FRDM-IMX95 RGB LED D19 (green GPIO_IO04, blue GPIO_IO12,
+ * red GPIO_IO13, active high) and LPI2C4, the display bus with the IT6263
+ * LVDS-to-HDMI bridge (0x4c, 0x33) and the PCA9632 LED driver (0x62).
+ */
+
+#include <zephyr/dt-bindings/gpio/gpio.h>
+#include <zephyr/dt-bindings/i2c/i2c.h>
+
+/ {
+	gpio2: gpio@43810000 {
+		compatible = "epp,xen-rgpio";
+		reg = <0x00 0x43810000 0x00 0x1000>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		ngpios = <32>;
+		status = "okay";
+	};
+
+	lpi2c4: i2c@42540000 {
+		compatible = "epp,xen-lpi2c";
+		reg = <0x00 0x42540000 0x00 0x10000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		clock-frequency = <I2C_BITRATE_STANDARD>;
+		status = "okay";
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led_red: led_red {
+			gpios = <&gpio2 13 GPIO_ACTIVE_HIGH>;
+			label = "D19 red";
+		};
+
+		led_green: led_green {
+			gpios = <&gpio2 4 GPIO_ACTIVE_HIGH>;
+			label = "D19 green";
+		};
+
+		led_blue: led_blue {
+			gpios = <&gpio2 12 GPIO_ACTIVE_HIGH>;
+			label = "D19 blue";
+		};
+	};
+};
