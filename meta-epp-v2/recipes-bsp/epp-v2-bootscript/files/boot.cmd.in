@@ -56,8 +56,9 @@ fi
 if test -z "${epp_zephyr_domu}"; then
     setenv epp_zephyr_domu "@@EPP_XEN_ZEPHYR@@"
 fi
-if test -z "${epp_zephyr_pt_path}"; then
-    setenv epp_zephyr_pt_path "@@EPP_XEN_ZEPHYR_PT_PATH@@"
+# Host device tree nodes passed through to the Zephyr DomU (space separated)
+if test -z "${epp_zephyr_pt_paths}"; then
+    setenv epp_zephyr_pt_paths "@@EPP_XEN_ZEPHYR_PT_PATHS@@"
 fi
 # Partial device tree for the Zephyr DomU passthrough, after its kernel
 if test -z "${epp_zephyr_pt_addr}"; then
@@ -102,12 +103,12 @@ if load ${epp_devtype} ${epp_devpart} ${epp_kernel_addr} ${image}; then
     if test "${epp_xen}" = "dom0less" && test "${epp_zephyr_domu}" = "yes"; then
         if load ${epp_devtype} ${epp_devpart} ${epp_zephyr_addr} zephyr-domu.bin; then
             setenv epp_zephyr_size ${filesize}
-            if test -n "${epp_zephyr_pt_path}"; then
+            if test -n "${epp_zephyr_pt_paths}"; then
                 if load ${epp_devtype} ${epp_devpart} ${epp_zephyr_pt_addr} zephyr-domu-pt.dtb; then
                     setenv epp_zephyr_pt_size ${filesize}
                 else
                     echo "epp-v2: WARNING zephyr-domu-pt.dtb not found, no passthrough"
-                    setenv epp_zephyr_pt_path ""
+                    setenv epp_zephyr_pt_paths ""
                 fi
             fi
         else
@@ -183,9 +184,11 @@ if load ${epp_devtype} ${epp_devpart} ${epp_kernel_addr} ${image}; then
             # Hardware passthrough: Xen takes the device away from Dom0
             # (status disabled there) and maps it into this domain as
             # described by the partial device tree
-            if test -n "${epp_zephyr_pt_path}"; then
-                echo "epp-v2: passing ${epp_zephyr_pt_path} through to the Zephyr DomU"
-                fdt set ${epp_zephyr_pt_path} xen,passthrough
+            if test -n "${epp_zephyr_pt_paths}"; then
+                for pt in ${epp_zephyr_pt_paths}; do
+                    echo "epp-v2: passing ${pt} through to the Zephyr DomU"
+                    fdt set ${pt} xen,passthrough
+                done
                 fdt mknode /chosen/domU2 module@1
                 fdt set /chosen/domU2/module@1 compatible "multiboot,device-tree" "multiboot,module"
                 fdt set /chosen/domU2/module@1 reg <0x0 ${epp_zephyr_pt_addr} 0x0 0x${epp_zephyr_pt_size}>

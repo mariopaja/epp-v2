@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Xen passthrough fragment "lpi2c4": LPI2C4 (Linux i2c-3), the display bus
+ * of the FRDM-IMX95 with the LVDS-to-HDMI bridge IT6263 (0x4c, 0x33) and the
+ * backlight LED driver PCA9632 (0x62). Registers mapped 1:1, no interrupts
+ * and no DMA (the Zephyr driver polls). Part of the /passthrough node of
+ * epp-zephyr-pt.dts.
+ */
+
+i2c@42540000 {
+	compatible = "fsl,imx95-lpi2c", "fsl,imx7ulp-lpi2c";
+	reg = <0x0 0x42540000 0x0 0x10000>;
+	xen,path = "/soc/bus@42000000/i2c@42540000";
+	xen,reg = <0x0 0x42540000 0x0 0x10000 0x0 0x42540000>;
+	xen,force-assign-without-iommu;
+};

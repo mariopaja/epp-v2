@@ -1,0 +1,13 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Pin mux fragment "gpio2": RGB LED D19 pads as GPIO. Part of
+ * epp-zephyr-pt-pins.dtso (SCMI pinctrl hog, set once when Dom0 boots).
+ */
+
+pinctrl_epp_gpio2: eppgpio2grp {
+	fsl,pins = <
+		IMX95_PAD_GPIO_IO04__GPIO2_IO_BIT4	0x31e
+		IMX95_PAD_GPIO_IO12__GPIO2_IO_BIT12	0x31e
+		IMX95_PAD_GPIO_IO13__GPIO2_IO_BIT13	0x31e
+	>;
+};

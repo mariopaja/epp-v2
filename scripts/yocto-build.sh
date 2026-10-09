@@ -110,12 +110,16 @@ if [ -n "${EPP_XEN_ZEPHYR_IMAGE}" ] && [ "${EPP_XEN}" = "dom0less" ]; then
         *) echo "Error: EPP_XEN_ZEPHYR_CPU must be empty or 1-5 (got '${EPP_XEN_ZEPHYR_CPU}')" >&2; exit 1 ;;
     esac
     echo "Zephyr DomU: ${EPP_XEN_ZEPHYR_IMAGE} (${EPP_XEN_ZEPHYR_VCPUS} vCPU, ${EPP_XEN_ZEPHYR_MEM} MB, core ${EPP_XEN_ZEPHYR_CPU:-shared})"
-    case "${EPP_XEN_ZEPHYR_PASSTHROUGH}" in
-        "") ;;
-        gpio2) EPP_OVERLAYS="${EPP_OVERLAYS:+${EPP_OVERLAYS} }epp-zephyr-gpio2-pins.dtbo"
-               echo "Zephyr DomU passthrough: GPIO2 (RGB LED D19)" ;;
-        *) echo "Error: EPP_XEN_ZEPHYR_PASSTHROUGH must be empty or gpio2 (got '${EPP_XEN_ZEPHYR_PASSTHROUGH}')" >&2; exit 1 ;;
-    esac
+    for pt in ${EPP_XEN_ZEPHYR_PASSTHROUGH}; do
+        case "${pt}" in
+            gpio2)  echo "Zephyr DomU passthrough: GPIO2 (RGB LED D19)" ;;
+            lpi2c4) echo "Zephyr DomU passthrough: LPI2C4 (display I2C bus)" ;;
+            *) echo "Error: EPP_XEN_ZEPHYR_PASSTHROUGH: unknown device '${pt}' (gpio2, lpi2c4)" >&2; exit 1 ;;
+        esac
+    done
+    if [ -n "${EPP_XEN_ZEPHYR_PASSTHROUGH}" ]; then
+        EPP_OVERLAYS="${EPP_OVERLAYS:+${EPP_OVERLAYS} }epp-zephyr-pt-pins.dtbo"
+    fi
 fi
 echo "Images:   ${IMAGES}"
 

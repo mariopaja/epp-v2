@@ -1,0 +1,15 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Xen passthrough fragment "gpio2": GPIO2 with the RGB LED D19 (green
+ * GPIO_IO04, blue GPIO_IO12, red GPIO_IO13) and the GPIO_IOxx pins of the
+ * 40-pin header. Registers mapped 1:1, no interrupts (the Zephyr driver
+ * polls). Part of the /passthrough node of epp-zephyr-pt.dts.
+ */
+
+gpio@43810000 {
+	compatible = "fsl,imx95-gpio", "fsl,imx8ulp-gpio";
+	reg = <0x0 0x43810000 0x0 0x1000>;
+	xen,path = "/soc/gpio@43810000";
+	xen,reg = <0x0 0x43810000 0x0 0x1000 0x0 0x43810000>;
+	xen,force-assign-without-iommu;
+};
