@@ -56,6 +56,15 @@ config EPP_W5500
 	  on LPSPI7 and write and read back its MAC address register. Set by
 	  w5500.conf, together with w5500.overlay (the w5500 node).
 
+config EPP_W5500_ETH
+	bool "W5500 as second network interface (Zephyr's W5500 driver)"
+	depends on EPP_LPSPI7 && !EPP_W5500
+	help
+	  A WIZnet W5500 on LPSPI7 with Zephyr's Ethernet driver: DHCP on it
+	  and its state every 10 s, next to netfront. LPSPI7 then starts at
+	  boot: lpspi7 must be passed through and its pins set by U-Boot.
+	  Set by w5500-eth.conf, together with w5500-eth.overlay.
+
 config EPP_PCF8574
 	bool "PCF8574 I/O expander module on the header I2C"
 	depends on EPP_LPI2C6

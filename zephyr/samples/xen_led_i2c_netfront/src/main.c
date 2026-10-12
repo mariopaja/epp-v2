@@ -19,6 +19,8 @@
  *   CONFIG_EPP_W5500    W5500 module on lpspi7: version, PHY state, MAC
  *                       register write and read back (instead of the
  *                       loopback test)
+ *   CONFIG_EPP_W5500_ETH W5500 module on lpspi7 as second network
+ *                       interface (Zephyr's W5500 driver), DHCP
  *   CONFIG_EPP_PCF8574  PCF8574 module on pins 3/5: its pins P0-P7 go high
  *                       one after the other, then all high, then all low,
  *                       every step read back
@@ -304,7 +306,30 @@ static void header_report(void)
 static const struct device *const header_spi = DEVICE_DT_GET(DT_NODELABEL(lpspi7));
 static atomic_t spi_on;
 
-#ifdef CONFIG_EPP_W5500
+#if defined(CONFIG_EPP_W5500_ETH)
+BUILD_ASSERT(DT_NODE_EXISTS(DT_NODELABEL(w5500_eth)),
+	     "CONFIG_EPP_W5500_ETH needs w5500-eth.overlay");
+
+/* The W5500 network interface; LPSPI7 and the W5500 driver start at boot */
+static struct net_if *w5500_iface(void)
+{
+	return net_if_lookup_by_dev(DEVICE_DT_GET(DT_NODELABEL(w5500_eth)));
+}
+
+static void print_net(struct net_if *iface, const char *label);
+
+static void spi_test(uint32_t round)
+{
+	struct net_if *iface = w5500_iface();
+
+	ARG_UNUSED(round);
+	if (iface != NULL) {
+		print_net(iface, "w5500");
+	} else {
+		printk("app: w5500: no network interface (driver not ready)\n");
+	}
+}
+#elif defined(CONFIG_EPP_W5500)
 BUILD_ASSERT(DT_NODE_EXISTS(DT_NODELABEL(w5500)), "CONFIG_EPP_W5500 needs w5500.overlay");
 
 #define W5500_SPI_OP     (SPI_OP_MODE_CONTROLLER | SPI_WORD_SET(8) | SPI_TRANSFER_MSB)
@@ -389,10 +414,11 @@ static void spi_test(uint32_t round)
 		       in[0], in[1], in[2], in[3]);
 	}
 }
-#endif /* CONFIG_EPP_W5500 */
+#endif /* CONFIG_EPP_W5500_ETH, CONFIG_EPP_W5500 */
 
 static void spi_start(void)
 {
+	/* With CONFIG_EPP_W5500_ETH the bus is already running: -EALREADY */
 	if (!start_device(header_spi, "lpspi7")) {
 		return;
 	}
@@ -466,7 +492,7 @@ K_THREAD_DEFINE(pt_thread, 4096, passthrough_thread, NULL, NULL, NULL, 7, 0, 0);
 
 /* ---- main: LED and network --------------------------------------------- */
 
-static void print_net(struct net_if *iface)
+static void print_net(struct net_if *iface, const char *label)
 {
 	struct net_linkaddr *ll = net_if_get_link_addr(iface);
 	struct net_in_addr *ip = net_if_ipv4_get_global_addr(iface, NET_ADDR_PREFERRED);
@@ -478,14 +504,34 @@ static void print_net(struct net_if *iface)
 		snprintf(addr, sizeof(addr), "none");
 	}
 
-	printk("app: net: carrier %s, mac %02x:%02x:%02x:%02x:%02x:%02x, ipv4 %s\n",
+	printk("app: %s: carrier %s, mac %02x:%02x:%02x:%02x:%02x:%02x, ipv4 %s\n", label,
 	       net_if_is_carrier_ok(iface) ? "on" : "off", ll->addr[0], ll->addr[1], ll->addr[2],
 	       ll->addr[3], ll->addr[4], ll->addr[5], addr);
 }
 
+#ifdef CONFIG_EPP_W5500_ETH
+/* netfront: the network interface that is not the W5500 */
+static void find_netfront(struct net_if *iface, void *user_data)
+{
+	struct net_if **found = user_data;
+
+	if ((*found == NULL) && (iface != w5500_iface())) {
+		*found = iface;
+	}
+}
+#endif
+
 int main(void)
 {
 	struct net_if *iface = net_if_get_default();
+
+#ifdef CONFIG_EPP_W5500_ETH
+	iface = NULL;
+	net_if_foreach(find_netfront, &iface);
+	if (w5500_iface() != NULL) {
+		net_dhcpv4_start(w5500_iface());
+	}
+#endif
 	bool leds_ok = true;
 
 	for (size_t i = 0U; i < ARRAY_SIZE(leds); i++) {
@@ -513,7 +559,7 @@ int main(void)
 			printk("app: [%u] LED %s, passthrough %s\n", round / 10U,
 			       leds_ok ? "cycling" : "off", passthrough);
 			if (iface != NULL) {
-				print_net(iface);
+				print_net(iface, "net");
 			}
 			display_report(round / 10U);
 			header_report();
