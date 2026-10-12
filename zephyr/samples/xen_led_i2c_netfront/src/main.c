@@ -159,7 +159,7 @@ static void display_report(uint32_t round)
 
 #ifdef CONFIG_EPP_PCF8574
 BUILD_ASSERT(DT_NODE_HAS_PROP(DT_PATH(zephyr_user), pcf8574_gpios),
-	     "CONFIG_EPP_PCF8574 needs the pcf8574 and zephyr,user nodes in app.overlay");
+	     "CONFIG_EPP_PCF8574 needs pcf8574.overlay (pcf8574 and zephyr,user nodes)");
 
 /* PCF8574 P0-P7, from pcf8574-gpios of the zephyr,user node */
 #define PCF_GPIO(node, prop, idx) GPIO_DT_SPEC_GET_BY_IDX(node, prop, idx),

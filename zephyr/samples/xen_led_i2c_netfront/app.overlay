@@ -25,9 +25,9 @@
 
 	/*
 	 * Display bus: IT6263 HDMI bridge (0x4c, 0x33), PCA9632 (0x62). It
-	 * belongs to HDMI in Linux, so it is disabled here: set "okay" to
-	 * compile in its test (CONFIG_EPP_LPI2C4 follows this status) and
-	 * select lpi2c4 with epp-passthrough in Dom0.
+	 * belongs to HDMI in Linux, so it is disabled here; lpi2c4.overlay
+	 * enables it and with it its test (CONFIG_EPP_LPI2C4 follows this
+	 * status). Then select lpi2c4 with epp-passthrough in Dom0.
 	 */
 	lpi2c4: i2c@42540000 {
 		compatible = "epp,xen-lpi2c";
@@ -47,38 +47,8 @@
 		clock-frequency = <I2C_BITRATE_STANDARD>;
 		zephyr,deferred-init;
 		status = "okay";
-
-		/*
-		 * Optional test device, not on the board: a PCF8574 I/O expander
-		 * module on the header (VCC pin 1 3.3 V, GND pin 6, SDA pin 3,
-		 * SCL pin 5) at 0x20 (A0-A2 to GND; a PCF8574A is at 0x38).
-		 * Uncomment this node, the zephyr,user node below and
-		 * CONFIG_EPP_PCF8574 in prj.conf to drive its pins P0-P7 as
-		 * GPIOs (with the lpi2c6 passthrough). Like the bus, it is
-		 * started by the application.
-		 *
-		 * pcf8574: gpio@20 {
-		 *	compatible = "nxp,pcf857x";
-		 *	reg = <0x20>;
-		 *	gpio-controller;
-		 *	#gpio-cells = <2>;
-		 *	ngpios = <8>;
-		 *	zephyr,deferred-init;
-		 * };
-		 */
+		/* Optional PCF8574 test module: pcf8574.overlay */
 	};
-
-	/*
-	 * The PCF8574 pins P0-P7 as GPIOs of the application (with the
-	 * pcf8574 node above):
-	 *
-	 * zephyr,user {
-	 *	pcf8574-gpios = <&pcf8574 0 GPIO_ACTIVE_HIGH>, <&pcf8574 1 GPIO_ACTIVE_HIGH>,
-	 *			<&pcf8574 2 GPIO_ACTIVE_HIGH>, <&pcf8574 3 GPIO_ACTIVE_HIGH>,
-	 *			<&pcf8574 4 GPIO_ACTIVE_HIGH>, <&pcf8574 5 GPIO_ACTIVE_HIGH>,
-	 *			<&pcf8574 6 GPIO_ACTIVE_HIGH>, <&pcf8574 7 GPIO_ACTIVE_HIGH>;
-	 * };
-	 */
 
 	leds {
 		compatible = "gpio-leds";

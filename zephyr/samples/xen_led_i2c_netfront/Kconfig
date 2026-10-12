@@ -28,7 +28,7 @@ config EPP_PCF8574
 	help
 	  Drive the pins P0-P7 of a PCF8574 module at 0x20 (not on the board)
 	  as GPIOs: one pin high after the other, then all high, then all
-	  low, every step read back. Needs the pcf8574 and zephyr,user nodes
-	  in app.overlay (commented out there).
+	  low, every step read back. Set by pcf8574.conf, together with
+	  pcf8574.overlay (the pcf8574 and zephyr,user nodes).
 
 source "Kconfig.zephyr"
