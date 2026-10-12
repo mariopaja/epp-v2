@@ -11,6 +11,9 @@
 #                       passthrough with epp-passthrough, reboot (host: Dom0,
 #                       default EPP_BOARD_HOST from config.sh)
 #
+# --update changes only the Zephyr image and the passthrough: a preset with
+# EARLY_PINS needs a full image build (U-Boot) once.
+#
 # Zephyr is built on the host in ZEPHYR_WORKSPACE (config.sh). Settings from
 # the preset override board.conf for this build only; board.conf is not
 # changed. SKIP_SYNC=1 skips the repo sync of the Yocto build as usual.
@@ -29,7 +32,7 @@ list_presets() {
 }
 
 case "$1" in
-    ""|-h|--help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; echo; list_presets; exit 0 ;;
+    ""|-h|--help) sed -n '2,/^set -e/p' "$0" | sed -n 's/^# \{0,1\}//p'; echo; list_presets; exit 0 ;;
     -l|--list) list_presets; exit 0 ;;
 esac
 
@@ -46,7 +49,7 @@ case "$1" in
     *) die "unknown option '$1' (--flash, --update [host])" ;;
 esac
 
-DESCRIPTION="" ZEPHYR_APP="" ZEPHYR_EXTRA="" PASSTHROUGH=none
+DESCRIPTION="" ZEPHYR_APP="" ZEPHYR_EXTRA="" PASSTHROUGH=none EARLY_PINS=""
 source "${PRESET_DIR}/${PRESET}.conf"
 APP_DIR="${EPP_DIR}/zephyr/samples/${ZEPHYR_APP}"
 [ -d "${APP_DIR}" ] || die "Zephyr application not found: ${APP_DIR}"
@@ -60,6 +63,7 @@ done
 
 echo "Preset:      ${PRESET}: ${DESCRIPTION}"
 echo "Zephyr app:  ${ZEPHYR_APP}${ZEPHYR_EXTRA:+ + ${ZEPHYR_EXTRA}}"
+[ -z "${EARLY_PINS}" ] || echo "U-Boot pins: ${EARLY_PINS}"
 if [ "${PASSTHROUGH}" = none ]; then
     echo "Passthrough: gpio2 (default; switch on the board with epp-passthrough)"
 else
@@ -122,7 +126,7 @@ fi
 # --- Yocto image (Xen dom0less) ---------------------------------------------
 echo "=== Yocto: ./docker-run.sh --xen"
 EPP_XEN_ZEPHYR_IMAGE="xen/zephyr.bin" EPP_XEN_ZEPHYR_PASSTHROUGH="${PASSTHROUGH}" \
-    "${EPP_DIR}/docker-run.sh" --xen
+    EPP_XEN_ZEPHYR_EARLY_PINS="${EARLY_PINS:-none}" "${EPP_DIR}/docker-run.sh" --xen
 
 if [ "${MODE}" = flash ]; then
     "${EPP_DIR}/flash-sd.sh"
