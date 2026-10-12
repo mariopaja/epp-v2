@@ -24,8 +24,9 @@ do_image_wic[depends] += "epp-v2-image:do_image_complete"
 # Zephyr DomU (EPP_XEN_ZEPHYR_IMAGE): on the boot partition for boot.scr
 IMAGE_BOOT_FILES:append = "${@' zephyr-domu.bin' if d.getVar('EPP_XEN_ZEPHYR_IMAGE_PATH') else ''}"
 do_image_wic[depends] += "${@'epp-v2-xen-zephyr:do_deploy' if d.getVar('EPP_XEN_ZEPHYR_IMAGE_PATH') else ''}"
-# Partial device tree for hardware passed through to the Zephyr DomU
-IMAGE_BOOT_FILES:append = "${@' devicetree/epp-zephyr-pt.dtb;zephyr-domu-pt.dtb' if (d.getVar('EPP_XEN_ZEPHYR_IMAGE_PATH') and d.getVar('EPP_XEN_ZEPHYR_PASSTHROUGH')) else ''}"
+# Partial device trees for the hardware passthrough to the Zephyr DomU, one
+# per selectable option; boot.scr loads the selected one
+IMAGE_BOOT_FILES:append = "${@' devicetree/epp-zephyr-pt-*.dtb;xen-pt/' if d.getVar('EPP_XEN_ZEPHYR_IMAGE_PATH') else ''}"
 
 # Tell Dom0 and DomU apart on the network and the prompt. /boot/Image is the
 # DomU kernel for xl (/etc/xen/epp-v2.cfg); the kernel package installs it

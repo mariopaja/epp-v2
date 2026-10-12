@@ -18,6 +18,7 @@
 #   setenv epp_fdtfile imx95-15x15-frdm.dtb
 #   setenv epp_xen no                 # boot partition 2 without Xen
 #   setenv epp_xen_bootargs "..."     # Xen command line
+#   setenv epp_zephyr_pt lpi2c6       # passthrough option (see below)
 
 echo "epp-v2: boot script"
 
@@ -56,10 +57,25 @@ fi
 if test -z "${epp_zephyr_domu}"; then
     setenv epp_zephyr_domu "@@EPP_XEN_ZEPHYR@@"
 fi
-# Host device tree nodes passed through to the Zephyr DomU (space separated)
-if test -z "${epp_zephyr_pt_paths}"; then
-    setenv epp_zephyr_pt_paths "@@EPP_XEN_ZEPHYR_PT_PATHS@@"
+# Hardware passthrough to the Zephyr DomU: the fixed devices (GPIO2) and at
+# most one selectable device. epp_zephyr_pt is the option ("none" or a
+# device name): set at the prompt, else from epp-passthrough.txt on the boot
+# partition (written by epp-passthrough in Dom0), else the build default
+# (EPP_XEN_ZEPHYR_PASSTHROUGH). 'run epp_pt_<option>' sets epp_pt_paths (host
+# nodes) and epp_pt_names; the matching partial device tree and pin mux
+# overlay are xen-pt/epp-zephyr-pt-<option>.dtb and
+# overlays/epp-zephyr-pt-pins-<option>.dtbo.
+@@EPP_XEN_ZEPHYR_PT_MAP@@
+if test -z "${epp_zephyr_pt}"; then
+    if load ${epp_devtype} ${epp_devpart} ${fdtoverlay_addr_r} epp-passthrough.txt; then
+        env import -t ${fdtoverlay_addr_r} ${filesize} epp_zephyr_pt
+    fi
 fi
+if test -z "${epp_zephyr_pt}"; then
+    setenv epp_zephyr_pt "@@EPP_XEN_ZEPHYR_PT_DEFAULT@@"
+fi
+setenv epp_pt_paths ""
+setenv epp_pt_names ""
 # Partial device tree for the Zephyr DomU passthrough, after its kernel
 if test -z "${epp_zephyr_pt_addr}"; then
     setenv epp_zephyr_pt_addr 0xa9000000
@@ -103,13 +119,19 @@ if load ${epp_devtype} ${epp_devpart} ${epp_kernel_addr} ${image}; then
     if test "${epp_xen}" = "dom0less" && test "${epp_zephyr_domu}" = "yes"; then
         if load ${epp_devtype} ${epp_devpart} ${epp_zephyr_addr} zephyr-domu.bin; then
             setenv epp_zephyr_size ${filesize}
-            if test -n "${epp_zephyr_pt_paths}"; then
-                if load ${epp_devtype} ${epp_devpart} ${epp_zephyr_pt_addr} zephyr-domu-pt.dtb; then
-                    setenv epp_zephyr_pt_size ${filesize}
-                else
-                    echo "epp-v2: WARNING zephyr-domu-pt.dtb not found, no passthrough"
-                    setenv epp_zephyr_pt_paths ""
-                fi
+            if run epp_pt_${epp_zephyr_pt}; then
+                echo "epp-v2: Zephyr DomU passthrough: ${epp_pt_names} (option ${epp_zephyr_pt})"
+            else
+                echo "epp-v2: WARNING unknown passthrough option '${epp_zephyr_pt}', using none"
+                setenv epp_zephyr_pt none
+                run epp_pt_none
+            fi
+            if load ${epp_devtype} ${epp_devpart} ${epp_zephyr_pt_addr} xen-pt/epp-zephyr-pt-${epp_zephyr_pt}.dtb; then
+                setenv epp_zephyr_pt_size ${filesize}
+            else
+                echo "epp-v2: WARNING xen-pt/epp-zephyr-pt-${epp_zephyr_pt}.dtb not found, no passthrough"
+                setenv epp_pt_paths ""
+                setenv epp_pt_names ""
             fi
         else
             echo "epp-v2: WARNING zephyr-domu.bin not found, no Zephyr DomU"
@@ -127,6 +149,14 @@ if load ${epp_devtype} ${epp_devpart} ${epp_kernel_addr} ${image}; then
                 echo "epp-v2: WARNING overlay ${ov} not found"
             fi
         done
+        # Pin mux of the passed-through devices (Dom0 no longer sets it)
+        if test -n "${epp_pt_paths}"; then
+            if load ${epp_devtype} ${epp_devpart} ${fdtoverlay_addr_r} overlays/epp-zephyr-pt-pins-${epp_zephyr_pt}.dtbo; then
+                fdt apply ${fdtoverlay_addr_r}
+            else
+                echo "epp-v2: WARNING overlays/epp-zephyr-pt-pins-${epp_zephyr_pt}.dtbo not found"
+            fi
+        fi
         # dom0less DomUs in Xen's numbering order (domain 1, 2, ...), passed to
         # Dom0 as epp.domus= for epp-v2-dom0less-setup, which names them and
         # attaches their devices. Must match the node order created below:
@@ -135,7 +165,9 @@ if load ${epp_devtype} ${epp_devpart} ${epp_kernel_addr} ${image}; then
         if test "${epp_xen}" = "dom0less"; then
             setenv epp_domus "epp.domus=linux"
             if test "${epp_zephyr_domu}" = "yes"; then
-                setenv epp_domus "epp.domus=linux,zephyr"
+                # epp.passthrough: for Dom0, which tells the Zephyr DomU
+                # (xenstore epp/passthrough) and shows it in epp-passthrough
+                setenv epp_domus "epp.domus=linux,zephyr epp.passthrough=${epp_pt_names}"
             fi
         fi
         if test "${epp_xen}" != "no"; then
@@ -184,8 +216,8 @@ if load ${epp_devtype} ${epp_devpart} ${epp_kernel_addr} ${image}; then
             # Hardware passthrough: Xen takes the device away from Dom0
             # (status disabled there) and maps it into this domain as
             # described by the partial device tree
-            if test -n "${epp_zephyr_pt_paths}"; then
-                for pt in ${epp_zephyr_pt_paths}; do
+            if test -n "${epp_pt_paths}"; then
+                for pt in ${epp_pt_paths}; do
                     echo "epp-v2: passing ${pt} through to the Zephyr DomU"
                     fdt set ${pt} xen,passthrough
                 done
