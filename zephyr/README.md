@@ -226,6 +226,7 @@ the options, selected on the board:
 | `lpi2c6` (option) | LPI2C6 (disabled in Linux) | `0x426c0000` | I2C of the 40-pin header J19: pin 3 SDA (GPIO_IO02), pin 5 SCL (GPIO_IO03) | `epp,xen-lpi2c` |
 | `lpi2c7` (option) | LPI2C7 (disabled in Linux) | `0x426d0000` | I2C of the 40-pin header J19: pin 31 SDA (GPIO_IO06), pin 26 SCL (GPIO_IO07) | `epp,xen-lpi2c` |
 | `lpspi7` (option) | LPSPI7 (disabled in Linux) | `0x42710000` | SPI of the 40-pin header J19: SCK pin 26, MOSI pin 31, MISO pin 29, chip select pin 35 (GPIO2 19), reset pin 37 (GPIO2 26) | `epp,xen-lpspi` |
+| `flexcan2` (option) | FlexCAN2 (Linux `can0` without passthrough) | `0x425b0000`, interrupt GIC SPI 38 | CAN2, transceiver TJA1051, connector J20 (pin 1 CANH, 2 CANL, 3 GND); Linux keeps CAN5 (J21) | `epp,xen-flexcan` |
 
 Any combination works, except `lpi2c7` with `lpspi7`: both use pins 31/26
 (`EPP_XEN_ZEPHYR_PT_CONFLICTS` in layer.conf). `epp-passthrough` refuses to
@@ -272,7 +273,7 @@ Nothing is passed through automatically, and Xen hands over whole register
 blocks, not single pins or bus addresses: the DomU gets all 32 pins of
 GPIO2, or the whole I2C bus with every device on it. The build prepares
 every combination of the options that does not contain a conflicting pair
-(24 for the five options); `boot.scr` picks the selected one:
+(48 for the six options); `boot.scr` picks the selected one:
 
 1. **Xen:** `boot.scr` marks the host nodes `xen,passthrough`, so Xen takes
    them from Dom0, and loads the partial device tree
@@ -306,6 +307,7 @@ fragment pair each in `meta-epp-v2/recipes-bsp/epp-v2-overlays/files/`:
 |---|---|
 | `epp-zephyr-<name>-pt.dtsi` | node of the partial device tree: `xen,path`, `xen,reg`, `xen,force-assign-without-iommu` |
 | `epp-zephyr-<name>-pins.dtsi` | pin group `pinctrl_epp_<name>` for the hog |
+| `epp-zephyr-<name>-dom0.dtsi` | optional: other changes to Dom0's device tree while the device is passed through (top level of the pin mux overlay); `flexcan2` keeps the CAN transceivers on |
 
 From these the build generates the files per combination (`epp-v2-overlays`,
 combinations: `EPP_XEN_ZEPHYR_PT_COMBOS`), the combination table in
@@ -434,6 +436,57 @@ things change compared with the other parts:
   card (`./flash-sd.sh`). The pins then stay switched for every passthrough
   selection.
 
+### CAN between the Zephyr DomU and Linux (`flexcan2`)
+
+The board has three CAN transceivers (TJA1051, schematic page 31) with
+termination: CAN2 on connector J20 and CAN5 on J21 (PHB 2.0 mm, pin 1
+CANH, 2 CANL, 3 GND; CAN1 goes to the connector of page 19). With
+`flexcan2` the Zephyr DomU gets FlexCAN2 and its interrupt; Linux in Dom0
+keeps FlexCAN5. Connect J20 to J21 (1-1, 2-2, 3-3) for a bus between the
+two:
+
+```bash
+# Dom0 (iproute2 and can-utils are in the Dom0 image)
+ip link set can0 type can bitrate 500000
+ip link set can0 up
+candump -t d can0 &
+cansend can0 100#11223344
+```
+
+```
+ (000.000000)  can0  123   [4]  00 00 00 66      Zephyr heartbeat, every second
+ (000.422557)  can0  100   [4]  11 22 33 44      cansend in Dom0
+ (000.000170)  can0  101   [4]  11 22 33 44      Zephyr's answer
+app: can (J20): error-active (tx err 0, rx err 0), sent 21, received 1, last 0x100 [4] 11 22 33 44
+```
+
+- **Bit rate:** 500 kbit/s from the CAN2 clock root, 24 MHz (the System
+  Manager's default; Linux sets 40 MHz only while it owns the controller):
+  prescaler 3, 16 time quanta, sample point 87.5 %.
+- **Transceiver standby:** the standby line (`CAN_STBY`, GPIO expander
+  line 7, regulator `can-stby` in Linux) is shared by the three
+  transceivers, and Linux switches it on only while one of its CAN
+  interfaces is up. `epp-zephyr-flexcan2-dom0.dtsi` makes it
+  `regulator-always-on` while `flexcan2` is passed through. Without it the
+  Zephyr DomU's frames do not reach the bus (bit errors, bus-off) while
+  Linux's `can0` is down.
+- **CAN2/CAN5 switch:** the pins reach the transceivers through U19
+  (schematic page 18) while "CAN2&5/GPIO select" is low, a gpio-hog of the
+  FRDM device tree that Dom0 sets independently of FlexCAN2.
+- **No other node:** without a node that acknowledges (Linux's `can0`
+  down, nothing wired) the Zephyr DomU's frames are retransmitted and it
+  goes error-passive; it recovers by itself once another node is on the bus
+  (also from bus-off). The application sends with a callback, so it never
+  waits for that.
+
+Without wiring: `can-loopback.conf` (preset `can-loopback`) starts FlexCAN2
+in loopback mode, where it receives its own frames internally; every 10 s
+the application also sends a request to itself:
+
+```
+app: can (J20, loopback): error-active (tx err 0, rx err 0), sent 23, received 23, last 0x100 [2] ca fe
+```
+
 ### Drivers and samples
 
 The upstream NXP drivers need SCMI (clocks), pinctrl and the MCUX SoC
@@ -444,6 +497,7 @@ drivers:
 |---|---|
 | `CONFIG_EPP_XEN_RGPIO` | RGPIO, `epp,xen-rgpio`: inputs and outputs; pin interrupts (rising, falling, both edges, low and high level, through the interrupt control registers ICR and the flags in ISFR) when the node has the interrupt Xen routes; no pull or open-drain flags (pad settings belong to the pin mux). The secure-only registers PCNS/PCNP must not be accessed from the DomU; reading them aborts |
 | `CONFIG_EPP_XEN_LPI2C` | LPI2C controller, `epp,xen-lpi2c`: 7-bit addresses, standard (100 kHz) and fast mode (400 kHz), polled. The SCL timing assumes the 24 MHz functional clock (`functional-clock-frequency`) |
+| `CONFIG_EPP_XEN_FLEXCAN` | FlexCAN, `epp,xen-flexcan`: classic CAN (no CAN FD), standard and extended IDs, remote frames, 8 receive filters (one mailbox each, individual masks), one transmit mailbox, normal, loopback and listen-only mode, state changes; interrupt driven. Start-up and i.MX95 quirks as in Linux's flexcan driver (ECC RAM init, MECR, reserved mailbox 0). Bit timing from the 24 MHz CAN clock (`functional-clock-frequency`) |
 | `CONFIG_EPP_XEN_LPSPI` | LPSPI controller, `epp,xen-lpspi`: controller mode, 8-bit words, full duplex, SPI modes 0-3, MSB or LSB first, polled, chip select by GPIO (`cs-gpios`). SCK = 24 MHz / (2^prescale x (div + 2)), up to 12 MHz |
 
 | Sample | Needs | Does |
@@ -464,6 +518,8 @@ Kconfig (its `Kconfig` and `prj.conf`), each in its own `#ifdef` block:
 | `CONFIG_EPP_LPI2C7` | header I2C pins 31/26: scan | on (follows the `lpi2c7` node) |
 | `CONFIG_EPP_LPSPI7` | header SPI: loopback test | on (follows the `lpspi7` node) |
 | `CONFIG_EPP_W5500` | W5500 register test on the header SPI instead of the loopback test (`w5500.overlay` + `w5500.conf`) | off |
+| `CONFIG_EPP_FLEXCAN2` | CAN2: heartbeat 0x123 every second, frames with ID 0x100 answered on 0x101 with the same data, state every 10 s | on (follows the `flexcan2` node) |
+| `CONFIG_EPP_FLEXCAN2_LOOPBACK` | CAN2 in loopback mode, no wiring (`can-loopback.conf`) | off |
 | `CONFIG_EPP_W5500_ETH` | W5500 as second network interface with Zephyr's driver, DHCP (`w5500-eth.overlay` + `w5500-eth.conf`; LPSPI7 starts at boot) | off |
 | `CONFIG_EPP_PCF8574` | PCF8574 module on pins 3/5 (below) | off |
 
@@ -540,4 +596,7 @@ with no device connected there yet), `lpi2c6 lpspi7` with a W5500 module
 `header-spi-w5500-eth` (pins set by U-Boot, W5500 with Zephyr's driver:
 DHCP and ping from the LAN on both netfront and W5500; with INTn on pin 36
 the driver uses the GPIO interrupt, ping 0.8 ms instead of about 7 ms when
-polling).
+polling); `flexcan2` in loopback mode and with J20 wired to J21 (heartbeat
+in `candump` on Dom0's `can0`, `cansend` answered in 0.17 ms, both nodes
+error-active; with `can0` down the Zephyr DomU keeps running and recovers
+when it comes up).
