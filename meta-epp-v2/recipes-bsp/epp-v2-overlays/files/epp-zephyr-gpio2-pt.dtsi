@@ -2,13 +2,17 @@
 /*
  * Xen passthrough fragment "gpio2": GPIO2 with the RGB LED D19 (green
  * GPIO_IO04, blue GPIO_IO12, red GPIO_IO13) and the GPIO_IOxx pins of the
- * 40-pin header. Registers mapped 1:1, no interrupts (the Zephyr driver
- * polls). Part of the /passthrough node of epp-zephyr-pt-<option>.dts.
+ * 40-pin header. Registers mapped 1:1; the first GPIO2 interrupt (GIC SPI 49,
+ * the one Linux uses too) is routed to the DomU under the same number
+ * (interrupt-parent 0xfde8 = 65000: Xen's phandle for the guest GIC). Part
+ * of the /passthrough node of epp-zephyr-pt-<combination>.dts.
  */
 
 gpio@43810000 {
 	compatible = "fsl,imx95-gpio", "fsl,imx8ulp-gpio";
 	reg = <0x0 0x43810000 0x0 0x1000>;
+	interrupt-parent = <0xfde8>;
+	interrupts = <0x0 49 0x4>;	/* GIC_SPI 49, level high */
 	xen,path = "/soc/gpio@43810000";
 	xen,reg = <0x0 0x43810000 0x0 0x1000 0x0 0x43810000>;
 	xen,force-assign-without-iommu;

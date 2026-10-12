@@ -3,7 +3,8 @@
  * Xen passthrough fragment "lpspi7": LPSPI7 on the 40-pin header J19, pin 26
  * SCK (GPIO_IO07), pin 31 SOUT/MOSI (GPIO_IO06), pin 29 SIN/MISO
  * (GPIO_IO05). Its PCS0 pad is the green LED, so the chip select is a GPIO2
- * pin (pin 35, GPIO_IO19), driven by Zephyr. Disabled and unused in Linux.
+ * pin (pin 35, GPIO_IO19), driven by Zephyr; device reset (pin 37) and
+ * interrupt (pin 36) are GPIO2 pins as well. Disabled and unused in Linux.
  * Registers mapped 1:1, no interrupts and no DMA (the Zephyr driver polls).
  * Part of the /passthrough node of epp-zephyr-pt-<combination>.dts.
  */
