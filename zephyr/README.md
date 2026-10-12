@@ -215,65 +215,73 @@ cycles in a row, each reconnecting with a new MAC and address.
 
 Xen gives devices to the Zephyr DomU, mapped at their physical addresses;
 Dom0 then no longer sees them (`status = "disabled"` in its device tree).
-GPIO2 with the RGB LED is always passed through, plus at most one of the
-options, selected on the board:
+GPIO2 with the RGB LED is always passed through, plus any combination of
+the options, selected on the board:
 
 | Name | Device | Address | On the FRDM-IMX95 | Zephyr compatible |
 |---|---|---|---|---|
 | `gpio2` (always) | GPIO2 | `0x43810000` | RGB LED D19 (green GPIO_IO04, blue GPIO_IO12, red GPIO_IO13, active high), GPIO_IOxx pins of the 40-pin header | `epp,xen-rgpio` |
 | `lpi2c4` (option) | LPI2C4 (Linux `i2c-3`) | `0x42540000` | display bus: IT6263 LVDS-to-HDMI bridge (0x4c, 0x33), PCA9632 backlight LED driver (0x62); Linux loses HDMI | `epp,xen-lpi2c` |
+| `lpi2c5` (option) | LPI2C5 (disabled in Linux) | `0x426b0000` | I2C of the 40-pin header J19: pin 27 SDA (GPIO_IO00), pin 28 SCL (GPIO_IO01) | `epp,xen-lpi2c` |
 | `lpi2c6` (option) | LPI2C6 (disabled in Linux) | `0x426c0000` | I2C of the 40-pin header J19: pin 3 SDA (GPIO_IO02), pin 5 SCL (GPIO_IO03) | `epp,xen-lpi2c` |
+| `lpi2c7` (option) | LPI2C7 (disabled in Linux) | `0x426d0000` | I2C of the 40-pin header J19: pin 31 SDA (GPIO_IO06), pin 26 SCL (GPIO_IO07) | `epp,xen-lpi2c` |
+
+The options use different pins and controllers, so any combination works.
 
 ### Selecting the passthrough
 
-In Dom0 (SSH or serial console), `epp-passthrough` shows the options and
-selects one for the next boot:
+In Dom0 (SSH or serial console), `epp-passthrough` shows the options; a
+number ticks or unticks one, `s` saves the selection for the next boot:
 
 ```
 root@epp-v2-dom0:~# epp-passthrough
 Xen passthrough to the Zephyr DomU
 
-     always   gpio2    GPIO2: RGB LED D19, GPIO_IOxx pins of the 40-pin header
+         always  gpio2    GPIO2: RGB LED D19, GPIO_IOxx pins of the 40-pin header
 
-  0  ( )  none     nothing else
-  1  ( )  lpi2c4   LPI2C4: display I2C bus (IT6263 HDMI bridge, PCA9632), Linux loses HDMI
-  2  (*)  lpi2c6   LPI2C6: I2C of the 40-pin header, pin 3 SDA, pin 5 SCL
+  1  [ ]          lpi2c4   LPI2C4: display I2C bus (IT6263 HDMI bridge, PCA9632), Linux loses HDMI
+  2  [x]          lpi2c5   LPI2C5: I2C of the 40-pin header, pin 27 SDA, pin 28 SCL
+  3  [x]          lpi2c6   LPI2C6: I2C of the 40-pin header, pin 3 SDA, pin 5 SCL
+  4  [ ]          lpi2c7   LPI2C7: I2C of the 40-pin header, pin 31 SDA, pin 26 SCL
 
   running now: gpio2,lpi2c6
 
-Select 0-2, s to save, q to quit:
+Toggle 1-4, s to save, q to quit:
 ```
 
 ```bash
-epp-passthrough lpi2c4     # select without the menu
+epp-passthrough lpi2c5 lpi2c6    # select without the menu
 epp-passthrough none
-epp-passthrough -l         # show options, running and next selection
+epp-passthrough -l               # show options, running and next selection
 reboot
 ```
 
-It writes `epp-passthrough.txt` (`epp_zephyr_pt=lpi2c6`) to the boot
-partition. Without that file the build default applies,
-`EPP_XEN_ZEPHYR_PASSTHROUGH` in [board.conf](../board.conf) (empty: none).
-At the U-Boot prompt, `setenv epp_zephyr_pt lpi2c4; boot` overrides both
-for one boot. No rebuild is needed to switch.
+It writes `epp-passthrough.txt` (`epp_zephyr_pt=lpi2c5_lpi2c6`: the
+options in layer.conf order, joined with `_`) to the boot partition.
+Without that file the build default applies, `EPP_XEN_ZEPHYR_PASSTHROUGH`
+in [board.conf](../board.conf) (space separated; empty: none). At the U-Boot
+prompt, `setenv epp_zephyr_pt lpi2c4_lpi2c6; boot` overrides both for one
+boot. No rebuild is needed to switch.
 
 ### How it works
 
 Nothing is passed through automatically, and Xen hands over whole register
 blocks, not single pins or bus addresses: the DomU gets all 32 pins of
-GPIO2, or the whole I2C bus with every device on it. Per option the build
-prepares everything; `boot.scr` picks the selected one:
+GPIO2, or the whole I2C bus with every device on it. The build prepares
+every combination of the options (16 for four options); `boot.scr` picks
+the selected one:
 
 1. **Xen:** `boot.scr` marks the host nodes `xen,passthrough`, so Xen takes
    them from Dom0, and loads the partial device tree
-   `xen-pt/epp-zephyr-pt-<option>.dtb` as `multiboot,device-tree` module of
+   `xen-pt/epp-zephyr-pt-<combination>.dtb` as `multiboot,device-tree` module of
    `/chosen/domU2`, so Xen maps their registers into the DomU (`xen,path`:
    host node, `xen,reg`: address mapping, 1:1,
    `xen,force-assign-without-iommu`).
 2. **Pin mux:** Linux no longer sets the pins of a device it does not own.
-   `boot.scr` applies `overlays/epp-zephyr-pt-pins-<option>.dtbo`, which sets
-   them once at boot instead (SCMI pinctrl hog of Dom0): for `gpio2` the
-   three LED pads, for `lpi2c4` GPIO_IO30/31, for `lpi2c6` GPIO_IO02/03. To
+   `boot.scr` applies `overlays/epp-zephyr-pt-pins-<combination>.dtbo`, which
+   sets them once at boot instead (SCMI pinctrl hog of Dom0): for `gpio2`
+   the three LED pads, for `lpi2c4` GPIO_IO30/31, for `lpi2c5` GPIO_IO00/01,
+   for `lpi2c6` GPIO_IO02/03, for `lpi2c7` GPIO_IO06/07. To
    use other GPIO2 pins of the 40-pin header, add their
    `IMX95_PAD_GPIO_IOxx__GPIO2_IO_BITxx` entries to
    `epp-zephyr-gpio2-pins.dtsi` and rebuild the image.
@@ -295,9 +303,11 @@ fragment pair each in `meta-epp-v2/recipes-bsp/epp-v2-overlays/files/`:
 | `epp-zephyr-<name>-pt.dtsi` | node of the partial device tree: `xen,path`, `xen,reg`, `xen,force-assign-without-iommu` |
 | `epp-zephyr-<name>-pins.dtsi` | pin group `pinctrl_epp_<name>` for the hog |
 
-From these the build generates the per-option files (`epp-v2-overlays`), the
-option table in `boot.scr` (`epp-v2-bootscript`) and the list of
-`epp-passthrough` (`epp-v2-xen-dom0`).
+From these the build generates the files per combination (`epp-v2-overlays`,
+combinations: `EPP_XEN_ZEPHYR_PT_COMBOS`), the combination table in
+`boot.scr` (`epp-v2-bootscript`) and the list of `epp-passthrough`
+(`epp-v2-xen-dom0`). Options must not share pins or controllers; each one
+doubles the number of combinations.
 
 **Adding a device:** write the two fragments, add it to layer.conf and to the
 check in `scripts/yocto-build.sh`, and give Zephyr a driver and a node for
@@ -313,22 +323,30 @@ configuration (`mx95evk.cfg`) gives these controllers and their pads to the
 A55 side (`LM2 "AP"`), not to the M7. The board's "PWM/GPIO select" (LED
 instead of PWM) is a gpio-hog in the FRDM device tree, set by Dom0.
 
-### I2C on the 40-pin header (`lpi2c6`)
+### I2C on the 40-pin header (`lpi2c5`, `lpi2c6`, `lpi2c7`)
 
-The header's I2C pins (pins 3 and 5, as on a Raspberry Pi) can be LPI2C4 or
-LPI2C6 (schematic page 30, J19). LPI2C4 is already the display bus on
-GPIO_IO30/31, and the chip has one input select per signal, so `lpi2c6` uses
-LPI2C6, which nothing else on the board uses. The pins go directly to the
-SoC (not through the select switches of the SPI pins).
+Three I2C buses of the header J19 (schematic page 30) are usable, all with
+pins that go directly to the SoC and controllers nothing else on the board
+uses:
 
-| J19 pin | Signal |
-|---|---|
-| 1 | 3.3 V |
-| 3 | SDA (GPIO_IO02) |
-| 5 | SCL (GPIO_IO03) |
-| 6 | GND |
+| Option | SDA | SCL | Note |
+|---|---|---|---|
+| `lpi2c6` | pin 3 (GPIO_IO02) | pin 5 (GPIO_IO03) | the usual I2C pins of a Raspberry Pi header |
+| `lpi2c5` | pin 27 (GPIO_IO00) | pin 28 (GPIO_IO01) | ID_SD / ID_SC on a Raspberry Pi: a HAT's ID EEPROM appears here |
+| `lpi2c7` | pin 31 (GPIO_IO06) | pin 26 (GPIO_IO07) | |
 
-- **No pull-ups on the board** (R660-R663 are not fitted). The connected
+Power: pin 1 (and 17) 3.3 V, pin 6 (and 9, 14, 20, 25, 30, 34, 39) GND.
+
+Not usable: the same pins as LPI2C4 (pins 3/5) or LPI2C3 (pins 27/28),
+because those controllers already serve the display and USB-C buses on
+other pins and each I2C signal has one input select; LPI2C6 on pins 7/29
+(pin 7 is the green LED); LPI2C7/8 on pins 21/24 and 19/23, and LPI2C5 on
+pins 15/16, which go through the board's select switches (schematic page
+18; the SPI pins there showed no signal in an earlier test); LPI2C8 on pins
+32/33 (blue and red LED).
+
+- **No pull-ups on the board** (R660-R663 are not fitted for pins 3/5 and
+  27/28, none for pins 31/26). The connected
   module needs its own (most breakout boards have them), or add about
   2.2-4.7 kOhm from SDA and SCL to 3.3 V. The pads have the SoC's weak
   internal pull-ups enabled, enough for an idle bus but not for reliable
@@ -365,8 +383,10 @@ Kconfig (its `Kconfig` and `prj.conf`), each in its own `#ifdef` block:
 | Kconfig | Part | Default |
 |---|---|---|
 | `CONFIG_EPP_LPI2C4` | display bus: scan, IT6263 chip ID, PCA9632 register write and read back | off: follows the `lpi2c4` node in `app.overlay`, `status = "disabled"` (the bus belongs to HDMI). `lpi2c4.overlay` sets it `"okay"` |
-| `CONFIG_EPP_LPI2C6` | header I2C: scan | on (follows the `lpi2c6` node) |
-| `CONFIG_EPP_PCF8574` | PCF8574 module on the header (below) | off |
+| `CONFIG_EPP_LPI2C5` | header I2C pins 27/28: scan | on (follows the `lpi2c5` node) |
+| `CONFIG_EPP_LPI2C6` | header I2C pins 3/5: scan | on (follows the `lpi2c6` node) |
+| `CONFIG_EPP_LPI2C7` | header I2C pins 31/26: scan | on (follows the `lpi2c7` node) |
+| `CONFIG_EPP_PCF8574` | PCF8574 module on pins 3/5 (below) | off |
 
 When Dom0 passes a bus through that is compiled out, the application says
 so (`app: lpi2c4 is passed through, but CONFIG_EPP_LPI2C4 is off`) and does
@@ -382,12 +402,15 @@ west build -p -b xenvm/xenvm/gicv3 $HOME/dev/epp-v2/zephyr/samples/xen_led_i2c_n
 Or with the Yocto image in one step, from a preset: `./build-demo.sh
 header-i2c` (see the main [README](../README.md#demo-presets-build-demosh)).
 
-Every 10 s, with `lpi2c6` selected:
+Every 10 s, with `lpi2c5`, `lpi2c6` and `lpi2c7` selected (a PCF8574 on
+pins 3/5):
 
 ```
-app: [6] LED cycling, passthrough gpio2,lpi2c6
-app: net: carrier on, mac 00:16:3e:06:94:a5, ipv4 10.10.193.104
-app: header i2c (J19 pins 3/5): no devices
+app: [6] LED cycling, passthrough gpio2,lpi2c5,lpi2c6,lpi2c7
+app: net: carrier on, mac 00:16:3e:60:27:07, ipv4 10.10.193.224
+app: header i2c (J19 pins 27/28): no devices
+app: header i2c (J19 pins 3/5): 0x20
+app: header i2c (J19 pins 31/26): no devices
 ```
 
 With `lpi2c4` (and `CONFIG_EPP_LPI2C4`):
@@ -430,4 +453,6 @@ Switching with `epp-passthrough` and rebooting, one `xen_led_i2c_netfront`
 image: `lpi2c6` (PCF8574 found, Linux keeps `i2c-3`), `none` (GPIO2 only,
 Linux keeps all buses), `lpi2c4` (Linux loses `i2c-3`; with
 `CONFIG_EPP_LPI2C4` the display bus test passes, without it the bus is left
-alone).
+alone), `lpi2c5 lpi2c6 lpi2c7` together (all three buses started, PCF8574
+found on pins 3/5; pins 27/28 and 31/26 scanned without a bus error, but
+with no device connected there yet).
