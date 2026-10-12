@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  NXP LPUART passed through by Xen to a Zephyr DomU. Pin mux and clock are
+  set up outside the DomU (System Manager, Dom0), so there are no pinctrl or
+  clocks properties. Polled, 8N1.
+
+compatible: "epp,xen-lpuart"
+
+include: [uart-controller.yaml, base.yaml]
+
+properties:
+  reg:
+    required: true
+
+  current-speed:
+    default: 115200
+
+  internal-loopback:
+    type: boolean
+    description: |
+      Test aid: connect TX to RX inside the LPUART (CTRL[LOOPS]), without
+      the pins, to test the driver and the passthrough separately from the
+      pin path.
+
+  functional-clock-frequency:
+    type: int
+    default: 24000000
+    description: |
+      LPUART functional clock in Hz, as set by the System Manager (Linux in
+      Dom0: /sys/kernel/debug/clk/lpuartN/clk_rate). The baud rate divider
+      is derived from it.

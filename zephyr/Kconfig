@@ -88,4 +88,15 @@ config EPP_XEN_FLEXCAN
 	  SCMI and no pinctrl. Classic CAN, 8 receive filters (one mailbox
 	  each), one transmit mailbox.
 
+config EPP_XEN_LPUART
+	bool "NXP LPUART passed through to a Xen DomU"
+	default y
+	depends on SERIAL && DT_HAS_EPP_XEN_LPUART_ENABLED
+	select SERIAL_HAS_DRIVER
+	help
+	  Minimal polled LPUART driver for a UART that Xen passes through to
+	  the DomU (compatible "epp,xen-lpuart"): no SCMI and no pinctrl, the
+	  System Manager and Dom0 set those up. 8N1, baud rate from
+	  current-speed.
+
 endmenu
