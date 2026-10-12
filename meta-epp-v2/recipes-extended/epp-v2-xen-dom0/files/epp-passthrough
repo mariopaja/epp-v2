@@ -1,11 +1,12 @@
 #!/bin/sh
 # Select the hardware Xen passes through to the Zephyr DomU at the next
-# boot: the fixed devices (GPIO2) always, plus at most one option. Writes
+# boot: the fixed devices (GPIO2) always, plus any of the options. Writes
 # epp-passthrough.txt to the boot partition, which boot.scr reads.
 #
-#   epp-passthrough             menu
-#   epp-passthrough <option>    select an option (none, lpi2c4, ...)
-#   epp-passthrough -l          show the options and the selection
+#   epp-passthrough                     menu
+#   epp-passthrough <option> [...]      select these options (lpi2c5 lpi2c6 ...)
+#   epp-passthrough none                no option
+#   epp-passthrough -l                  show the options and the selection
 
 LIST=/usr/share/epp-v2/zephyr-passthrough.list
 FILE=epp-passthrough.txt
@@ -14,14 +15,23 @@ die() { echo "epp-passthrough: $*" >&2; exit 1; }
 [ -r "$LIST" ] || die "$LIST missing"
 
 names() { grep "^$1:" "$LIST" | cut -d: -f2 | tr '\n' ' '; }
-options="none $(names option)"
+options=$(names option)
 fixed=$(names fixed)
 default=$(grep '^default:' "$LIST" | cut -d: -f2)
-desc() {
-    [ "$1" = none ] && { echo "nothing else"; return; }
-    grep -E "^(fixed|option):$1:" "$LIST" | cut -d: -f3-
-}
+desc() { grep -E "^(fixed|option):$1:" "$LIST" | cut -d: -f3-; }
 valid() { for o in $options; do [ "$o" = "$1" ] && return 0; done; return 1; }
+
+# A selection is stored as the combination name boot.scr knows: the options
+# in list order joined with "_", or "none"
+combo() {
+    c=""
+    for o in $options; do
+        case " $* " in *" $o "*) c="${c:+${c}_}$o" ;; esac
+    done
+    echo "${c:-none}"
+}
+# Options of a combination name, space separated
+split() { [ "$1" = none ] || echo "$1" | tr _ ' '; }
 
 # Boot partition: partition 1 of the disk Dom0 runs from
 root=$(sed -n 's/.*root=\([^ ]*\).*/\1/p' /proc/cmdline)
@@ -48,16 +58,16 @@ write_selected() {
 
 active=$(sed -n 's/.*epp\.passthrough=\([^ ]*\).*/\1/p' /proc/cmdline)
 
-show() {
+show() {   # show <selected options>
     echo "Xen passthrough to the Zephyr DomU"
     echo
-    for f in $fixed; do printf '     always   %-8s %s\n' "$f" "$(desc "$f")"; done
+    for f in $fixed; do printf '         always  %-8s %s\n' "$f" "$(desc "$f")"; done
     echo
-    i=0
+    i=1
     for o in $options; do
         mark=" "
-        [ "$o" = "$1" ] && mark="*"
-        printf '  %d  (%s)  %-8s %s\n' "$i" "$mark" "$o" "$(desc "$o")"
+        case " $* " in *" $o "*) mark="x" ;; esac
+        printf '  %d  [%s]          %-8s %s\n' "$i" "$mark" "$o" "$(desc "$o")"
         i=$((i + 1))
     done
     echo
@@ -70,40 +80,50 @@ case "$1" in
         exit 0 ;;
     -l)
         with_boot read_selected
-        show "$selected"
-        echo "  next boot:   $selected"
+        show $(split "$selected")
+        echo "  next boot:   gpio2 $(split "$selected")"
         exit 0 ;;
     "") ;;
     *)
-        valid "$1" || die "unknown option '$1' (${options% })"
-        with_boot write_selected "$1" || die "cannot write $FILE"
-        echo "Selected $1 for the next boot (reboot to apply)."
+        if [ "$*" != none ]; then
+            for o in "$@"; do valid "$o" || die "unknown option '$o' ($options)"; done
+        fi
+        c=$(combo "$@")
+        with_boot write_selected "$c" || die "cannot write $FILE"
+        echo "Selected gpio2 $(split "$c") for the next boot (reboot to apply)."
         exit 0 ;;
 esac
 
-# Menu
+# Menu: toggle options by number
 with_boot read_selected
-choice=$selected
+choice=$(split "$selected")
+n=$(echo $options | wc -w)
 while true; do
     echo
-    show "$choice"
+    show $choice
     echo
-    printf 'Select 0-%d, s to save, q to quit: ' $(($(echo $options | wc -w) - 1))
+    printf 'Toggle 1-%d, s to save, q to quit: ' "$n"
     read -r key || exit 1
     case "$key" in
         q) echo "Not changed."; exit 0 ;;
         s)
-            with_boot write_selected "$choice" || die "cannot write $FILE"
-            echo "Saved: $choice at the next boot."
+            c=$(combo $choice)
+            with_boot write_selected "$c" || die "cannot write $FILE"
+            echo "Saved: gpio2 $(split "$c") at the next boot."
             printf 'Reboot now? [y/N] '
             read -r yn
             [ "$yn" = y ] && reboot
             exit 0 ;;
         *[!0-9]*|"") ;;
         *)
-            i=0
+            i=1
             for o in $options; do
-                [ "$i" = "$key" ] && choice=$o
+                if [ "$i" = "$key" ]; then
+                    case " $choice " in
+                        *" $o "*) choice=$(echo " $choice " | sed "s/ $o / /") ;;
+                        *) choice="$choice $o" ;;
+                    esac
+                fi
                 i=$((i + 1))
             done ;;
     esac

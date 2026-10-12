@@ -33,8 +33,9 @@ SYSTEMD_AUTO_ENABLE:${PN} = "${@'enable' if d.getVar('EPP_XEN') == 'dom0less' el
 EPP_LINUX_NAME = "${EPP_HOSTNAME}"
 
 # Passthrough devices for epp-passthrough (layer.conf), one per line:
-# fixed:<name>:<description>, option:<name>:<description>, default:<option>
-EPP_PT_LIST = "${@'|'.join(['fixed:%s:%s' % (n, d.getVarFlag('EPP_XEN_ZEPHYR_PT_DESC', n) or '') for n in d.getVar('EPP_XEN_ZEPHYR_PT_FIXED').split()] + ['option:%s:%s' % (n, d.getVarFlag('EPP_XEN_ZEPHYR_PT_DESC', n) or '') for n in d.getVar('EPP_XEN_ZEPHYR_PT_OPTIONS').split()] + ['default:%s' % (d.getVar('EPP_XEN_ZEPHYR_PASSTHROUGH') or 'none')])}"
+# fixed:<name>:<description>, option:<name>:<description> (in layer.conf
+# order), default:<combination>
+EPP_PT_LIST = "${@'|'.join(['fixed:%s:%s' % (n, d.getVarFlag('EPP_XEN_ZEPHYR_PT_DESC', n) or '') for n in d.getVar('EPP_XEN_ZEPHYR_PT_FIXED').split()] + ['option:%s:%s' % (n, d.getVarFlag('EPP_XEN_ZEPHYR_PT_DESC', n) or '') for n in d.getVar('EPP_XEN_ZEPHYR_PT_OPTIONS').split()] + ['default:%s' % d.getVar('EPP_XEN_ZEPHYR_PT_DEFAULT')])}"
 
 do_install[vardeps] += "EPP_XEN EPP_XEN_LINUX_MEM EPP_XEN_LINUX_VCPUS EPP_XEN_UPLINK EPP_DOMU_DISK \
                         EPP_LINUX_NAME EPP_PT_LIST"
