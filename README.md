@@ -39,7 +39,8 @@ epp-v2/
     ├── conf/layer.conf
     ├── recipes-core/images/epp-v2-image.bb       # the epp-v2 Linux
     ├── recipes-core/images/epp-v2-dom0-image.bb  # minimal Xen Dom0 (--xen=domu / dom0less)
-    ├── recipes-extended/epp-v2-xen-dom0/         # Dom0: xenbr0, backends, DomU start
+    ├── recipes-extended/epp-v2-xen-dom0/         # Dom0: xenbr0, backends, DomU start,
+    │                                             # epp-passthrough
     ├── recipes-extended/xen/                     # xen-tools fixes for dom0less PV devices
     ├── files/wic/epp-v2-xen-domu.wks.in          # SD layout with the DomU partition
     ├── recipes-core/base-files/          # hostname
@@ -51,6 +52,7 @@ epp-v2/
         ├── imx-mkimage/                  # imx-boot: depend on epp-v2-m7-firmware
         ├── epp-v2-overlays/              # device tree overlays (*.dtso), Xen
         │                                 # Xen passthrough fragments (*-pt.dtsi, *-pins.dtsi)
+        │                                 # (devices: conf/layer.conf)
         └── epp-v2-bootscript/            # U-Boot boot.scr that applies overlays
 ```
 
@@ -108,14 +110,12 @@ SKIP_SYNC=1 ./docker-run.sh --xen  # rebuild without repo sync
   `CONFIG_BOOT_TIME_CPUPOOLS` and `CONFIG_SCHED_NULL`); the other cores form
   Pool-0 (credit2) for Dom0 and the Linux DomU. Check in Dom0 with
   `xl cpupool-list` and `xl vcpu-list`.
-- `EPP_XEN_ZEPHYR_PASSTHROUGH` (e.g. `"gpio2 lpi2c4"`): Xen passes these
-  devices through to the Zephyr DomU: `gpio2` (RGB LED D19, GPIO_IOxx pins of
-  the 40-pin header), `lpi2c4` (display I2C bus), `lpi2c6` (I2C of the
-  40-pin header, pins 3/5). `boot.scr` marks their
-  host nodes `xen,passthrough` and gives the domain the partial device tree
-  `zephyr-domu-pt.dtb`; Dom0 sees them as `disabled`. Their pin mux comes
-  from the overlay `epp-zephyr-pt-pins.dtbo`, added automatically. Both are
-  generated from per-device fragments. See [zephyr/README.md](zephyr/README.md).
+- Hardware passthrough to the Zephyr DomU: GPIO2 (RGB LED D19) always, plus
+  at most one option, `lpi2c4` (display I2C bus, Linux loses HDMI) or
+  `lpi2c6` (I2C of the 40-pin header, pins 3/5). Select it in Dom0 with
+  `epp-passthrough` (menu) and reboot; `EPP_XEN_ZEPHYR_PASSTHROUGH` is only
+  the default. Dom0 sees passed-through devices as `disabled`. See
+  [zephyr/README.md](zephyr/README.md).
 - Domain names: `boot.scr` passes the dom0less DomUs to Dom0 in Xen's
   numbering order (`epp.domus=linux,zephyr` on the Dom0 command line);
   `epp-v2-dom0less.service` (`/usr/libexec/epp-v2-dom0less-setup`) sets up
@@ -225,7 +225,7 @@ sudo bmaptool copy images/epp-v2-sdcard.wic.zst /dev/sdX
 | `EPP_EXTRA_PACKAGES` | empty | Extra packages installed in the image |
 | `EPP_XEN_ZEPHYR_IMAGE` | empty | Zephyr image (raw `zephyr.bin` for `xenvm/xenvm/gicv3`, path inside this repo, e.g. `xen/zephyr.bin`) started as second DomU with `--xen=dom0less`. `EPP_XEN_ZEPHYR_VCPUS` / `EPP_XEN_ZEPHYR_MEM` (MB) set its resources |
 | `EPP_XEN_ZEPHYR_CPU` | `5` | Physical A55 core (1-5) reserved for the Zephyr DomU: own Xen cpupool with the `null` scheduler, so its vCPU always runs on that core and no other domain does. Empty: shared cores (credit2). Core 0 is Xen's boot CPU |
-| `EPP_XEN_ZEPHYR_PASSTHROUGH` | empty | Hardware Xen passes through to the Zephyr DomU (needs `EPP_XEN_ZEPHYR_IMAGE`): space-separated list: `gpio2` (GPIO2, RGB LED D19), `lpi2c4` (LPI2C4, display I2C bus), `lpi2c6` (LPI2C6, I2C of the 40-pin header, pins 3/5, no pull-ups on the board). Empty: none. Dom0 loses these devices |
+| `EPP_XEN_ZEPHYR_PASSTHROUGH` | empty | Default passthrough option for the Zephyr DomU next to GPIO2 (always): `lpi2c4` (display I2C bus, Linux loses HDMI) or `lpi2c6` (I2C of the 40-pin header, pins 3/5, no pull-ups on the board); empty: GPIO2 only. Switch on the board with `epp-passthrough` in Dom0 |
 | `EPP_M7_IMAGE` | empty | Cortex-M7 firmware (raw `.bin`, path inside this repo, e.g. `m7/zephyr.bin`) packed into the boot container and started by the System Manager at power-on. Empty: NXP's M7 demo. `none`: no M7 image, M7 off. Update only the M7 on a flashed card: `./flash-sd.sh --m7 <file\|none>`. See [zephyr/README.md](zephyr/README.md) |
 
 `scripts/yocto-build.sh` turns these into `conf/auto.conf` in the build
