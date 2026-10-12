@@ -55,16 +55,18 @@ fi
 
 # Generate conf/auto.conf from board.conf (regenerated on every build, so
 # edit board.conf / config.sh rather than auto.conf).
-# EPP_M7_IMAGE (flash-sd.sh --m7), EPP_XEN_ZEPHYR_IMAGE and
-# EPP_XEN_ZEPHYR_PASSTHROUGH (build-demo.sh) from the environment win over
-# board.conf
+# EPP_M7_IMAGE (flash-sd.sh --m7), EPP_XEN_ZEPHYR_IMAGE,
+# EPP_XEN_ZEPHYR_PASSTHROUGH and EPP_XEN_ZEPHYR_EARLY_PINS (build-demo.sh)
+# from the environment win over board.conf
 EPP_M7_IMAGE_ENV="${EPP_M7_IMAGE}"
 EPP_XEN_ZEPHYR_IMAGE_ENV="${EPP_XEN_ZEPHYR_IMAGE}"
 EPP_XEN_ZEPHYR_PASSTHROUGH_ENV="${EPP_XEN_ZEPHYR_PASSTHROUGH}"
+EPP_XEN_ZEPHYR_EARLY_PINS_ENV="${EPP_XEN_ZEPHYR_EARLY_PINS}"
 source "${EPP_DIR}/board.conf"
 EPP_M7_IMAGE="${EPP_M7_IMAGE_ENV:-${EPP_M7_IMAGE}}"
 EPP_XEN_ZEPHYR_IMAGE="${EPP_XEN_ZEPHYR_IMAGE_ENV:-${EPP_XEN_ZEPHYR_IMAGE}}"
 EPP_XEN_ZEPHYR_PASSTHROUGH="${EPP_XEN_ZEPHYR_PASSTHROUGH_ENV:-${EPP_XEN_ZEPHYR_PASSTHROUGH}}"
+EPP_XEN_ZEPHYR_EARLY_PINS="${EPP_XEN_ZEPHYR_EARLY_PINS_ENV:-${EPP_XEN_ZEPHYR_EARLY_PINS}}"
 
 EPP_XEN="${EPP_XEN:-no}"
 case "${EPP_XEN}" in
@@ -127,6 +129,17 @@ if [ -n "${EPP_XEN_ZEPHYR_IMAGE}" ] && [ "${EPP_XEN}" = "dom0less" ]; then
         esac
     done
     echo "Zephyr DomU passthrough: gpio2${EPP_XEN_ZEPHYR_PASSTHROUGH:+ ${EPP_XEN_ZEPHYR_PASSTHROUGH}} (default, change in Dom0 with epp-passthrough)"
+    [ "${EPP_XEN_ZEPHYR_EARLY_PINS}" = none ] && EPP_XEN_ZEPHYR_EARLY_PINS=""
+    for pt in ${EPP_XEN_ZEPHYR_EARLY_PINS}; do
+        case "${pt}" in
+            lpi2c5|lpi2c6|lpi2c7|lpspi7) ;;
+            *) echo "Error: EPP_XEN_ZEPHYR_EARLY_PINS: '${pt}' (lpi2c5, lpi2c6, lpi2c7, lpspi7)" >&2; exit 1 ;;
+        esac
+    done
+    [ -z "${EPP_XEN_ZEPHYR_EARLY_PINS}" ] || echo "Zephyr DomU pins set by U-Boot: ${EPP_XEN_ZEPHYR_EARLY_PINS}"
+else
+    # Header pins for a Zephyr DomU only (U-Boot would switch them otherwise)
+    EPP_XEN_ZEPHYR_EARLY_PINS=""
 fi
 echo "Images:   ${IMAGES}"
 
@@ -180,6 +193,7 @@ EPP_XEN_ZEPHYR_VCPUS = "${EPP_XEN_ZEPHYR_VCPUS}"
 EPP_XEN_ZEPHYR_MEM = "${EPP_XEN_ZEPHYR_MEM}"
 EPP_XEN_ZEPHYR_CPU = "${EPP_XEN_ZEPHYR_CPU}"
 EPP_XEN_ZEPHYR_PASSTHROUGH = "${EPP_XEN_ZEPHYR_PASSTHROUGH}"
+EPP_XEN_ZEPHYR_EARLY_PINS = "${EPP_XEN_ZEPHYR_EARLY_PINS}"
 EPP_EXTRA_PACKAGES = "${EPP_EXTRA_PACKAGES}"
 EOF
 
