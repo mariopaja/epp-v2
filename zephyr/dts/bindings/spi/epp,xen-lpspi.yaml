@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  NXP LPSPI controller passed through by Xen to a Zephyr DomU. Pin mux and
+  clock are set up outside the DomU (System Manager, Dom0), so there are no
+  pinctrl or clocks properties. Controller mode, 8-bit words, polled, chip
+  select by GPIO (cs-gpios).
+
+compatible: "epp,xen-lpspi"
+
+include: [spi-controller.yaml, base.yaml]
+
+properties:
+  reg:
+    required: true
+
+  functional-clock-frequency:
+    type: int
+    default: 24000000
+    description: |
+      LPSPI functional clock in Hz, as set by the System Manager (Linux in
+      Dom0: /sys/kernel/debug/clk/lpspiN/clk_rate). The SCK divider is
+      derived from it.

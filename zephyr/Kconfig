@@ -67,4 +67,14 @@ config EPP_XEN_LPI2C
 	  System Manager and Dom0 set those up. 7-bit addresses, standard and
 	  fast mode, polled.
 
+config EPP_XEN_LPSPI
+	bool "NXP LPSPI passed through to a Xen DomU"
+	default y
+	depends on SPI && DT_HAS_EPP_XEN_LPSPI_ENABLED
+	help
+	  Minimal controller driver for an LPSPI that Xen passes through to
+	  the DomU (compatible "epp,xen-lpspi"): no SCMI and no pinctrl, the
+	  System Manager and Dom0 set those up. 8-bit words, full duplex,
+	  polled, chip select by GPIO (cs-gpios).
+
 endmenu
