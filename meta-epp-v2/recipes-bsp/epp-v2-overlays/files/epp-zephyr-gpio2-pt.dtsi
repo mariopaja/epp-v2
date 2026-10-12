@@ -3,7 +3,7 @@
  * Xen passthrough fragment "gpio2": GPIO2 with the RGB LED D19 (green
  * GPIO_IO04, blue GPIO_IO12, red GPIO_IO13) and the GPIO_IOxx pins of the
  * 40-pin header. Registers mapped 1:1, no interrupts (the Zephyr driver
- * polls). Part of the /passthrough node of epp-zephyr-pt.dts.
+ * polls). Part of the /passthrough node of epp-zephyr-pt-<option>.dts.
  */
 
 gpio@43810000 {

@@ -1,0 +1,15 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Pin mux fragment "lpi2c5": 40-pin header J19 pin 27 (GPIO_IO00, SDA) and
+ * pin 28 (GPIO_IO01, SCL) as LPI2C5, same pad settings as the board's other
+ * I2C buses. No pull-ups on the board for these lines: the connected module
+ * must have them. Part of epp-zephyr-pt-pins-<option>.dtso (SCMI pinctrl
+ * hog, set once when Dom0 boots).
+ */
+
+pinctrl_epp_lpi2c5: epplpi2c5grp {
+	fsl,pins = <
+		IMX95_PAD_GPIO_IO00__LPI2C5_SDA		0x40000b9e
+		IMX95_PAD_GPIO_IO01__LPI2C5_SCL		0x40000b9e
+	>;
+};

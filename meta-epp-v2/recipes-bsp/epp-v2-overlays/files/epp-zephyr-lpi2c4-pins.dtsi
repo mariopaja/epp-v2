@@ -2,7 +2,7 @@
 /*
  * Pin mux fragment "lpi2c4": GPIO_IO30 (SDA) and GPIO_IO31 (SCL) as LPI2C4,
  * as in pinctrl_lpi2c4 of imx95-15x15-frdm.dts. Part of
- * epp-zephyr-pt-pins.dtso (SCMI pinctrl hog, set once when Dom0 boots).
+ * epp-zephyr-pt-pins-<option>.dtso (SCMI pinctrl hog, set once when Dom0 boots).
  */
 
 pinctrl_epp_lpi2c4: epplpi2c4grp {

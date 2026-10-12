@@ -3,7 +3,7 @@
  * Xen passthrough fragment "lpi2c6": LPI2C6 on the 40-pin header J19, pin 3
  * (SDA, GPIO_IO02) and pin 5 (SCL, GPIO_IO03). Disabled and unused in
  * Linux. Registers mapped 1:1, no interrupts and no DMA (the Zephyr driver
- * polls). Part of the /passthrough node of epp-zephyr-pt.dts.
+ * polls). Part of the /passthrough node of epp-zephyr-pt-<option>.dts.
  */
 
 i2c@426c0000 {

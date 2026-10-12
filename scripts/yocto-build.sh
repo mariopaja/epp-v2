@@ -116,13 +116,16 @@ if [ -n "${EPP_XEN_ZEPHYR_IMAGE}" ] && [ "${EPP_XEN}" = "dom0less" ]; then
         *) echo "Error: EPP_XEN_ZEPHYR_CPU must be empty or 1-5 (got '${EPP_XEN_ZEPHYR_CPU}')" >&2; exit 1 ;;
     esac
     echo "Zephyr DomU: ${EPP_XEN_ZEPHYR_IMAGE} (${EPP_XEN_ZEPHYR_VCPUS} vCPU, ${EPP_XEN_ZEPHYR_MEM} MB, core ${EPP_XEN_ZEPHYR_CPU:-shared})"
-    # Default passthrough option; GPIO2 always, selectable at boot with
-    # epp-passthrough in Dom0 (options: EPP_XEN_ZEPHYR_PT_OPTIONS, layer.conf)
-    case "${EPP_XEN_ZEPHYR_PASSTHROUGH}" in
-        ""|none) EPP_XEN_ZEPHYR_PASSTHROUGH="" ;;
-        lpi2c4|lpi2c6) ;;
-        *) echo "Error: EPP_XEN_ZEPHYR_PASSTHROUGH must be empty, lpi2c4 or lpi2c6 (got '${EPP_XEN_ZEPHYR_PASSTHROUGH}'; gpio2 is always passed through)" >&2; exit 1 ;;
-    esac
+    # Default passthrough (space separated); GPIO2 always, selectable at boot
+    # with epp-passthrough in Dom0 (options: EPP_XEN_ZEPHYR_PT_OPTIONS,
+    # layer.conf)
+    [ "${EPP_XEN_ZEPHYR_PASSTHROUGH}" = none ] && EPP_XEN_ZEPHYR_PASSTHROUGH=""
+    for pt in ${EPP_XEN_ZEPHYR_PASSTHROUGH}; do
+        case "${pt}" in
+            lpi2c4|lpi2c5|lpi2c6|lpi2c7) ;;
+            *) echo "Error: EPP_XEN_ZEPHYR_PASSTHROUGH: unknown device '${pt}' (lpi2c4, lpi2c5, lpi2c6, lpi2c7; gpio2 is always passed through)" >&2; exit 1 ;;
+        esac
+    done
     echo "Zephyr DomU passthrough: gpio2${EPP_XEN_ZEPHYR_PASSTHROUGH:+ ${EPP_XEN_ZEPHYR_PASSTHROUGH}} (default, change in Dom0 with epp-passthrough)"
 fi
 echo "Images:   ${IMAGES}"

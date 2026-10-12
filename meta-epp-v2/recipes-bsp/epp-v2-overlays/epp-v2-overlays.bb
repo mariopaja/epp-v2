@@ -2,9 +2,9 @@ SUMMARY = "epp-v2 device tree overlays for external modules"
 DESCRIPTION = "Builds every *.dtso in files/ against the kernel headers and \
 deploys the .dtbo files. epp-v2-image puts them on the boot partition under \
 overlays/, and the U-Boot boot script applies the ones listed in EPP_OVERLAYS. \
-For the Xen passthrough to the Zephyr DomU it also generates, per selectable \
-option, the partial device tree epp-zephyr-pt-<option>.dtb and the pin mux \
-overlay epp-zephyr-pt-pins-<option>.dtbo."
+For the Xen passthrough to the Zephyr DomU it also generates, per combination \
+of the selectable options, the partial device tree epp-zephyr-pt-<combo>.dtb \
+and the pin mux overlay epp-zephyr-pt-pins-<combo>.dtbo."
 
 inherit devicetree
 
@@ -24,15 +24,16 @@ SRC_URI = " \
 DT_FILES_PATH = "${WORKDIR}/epp-dts"
 
 do_configure[cleandirs] += "${DT_FILES_PATH}"
-do_configure[vardeps] += "EPP_XEN_ZEPHYR_PT_FIXED EPP_XEN_ZEPHYR_PT_OPTIONS"
+do_configure[vardeps] += "EPP_XEN_ZEPHYR_PT_FIXED EPP_XEN_ZEPHYR_PT_COMBOS"
 do_configure() {
     cp ${S}/*.dtso ${DT_FILES_PATH}/
 
-    # One variant per selectable option: the fixed devices plus the option
-    # ("none": the fixed devices only). boot.scr picks one at boot.
-    for opt in none ${EPP_XEN_ZEPHYR_PT_OPTIONS}; do
+    # One variant per combination of the selectable options (layer.conf):
+    # the fixed devices plus the combination's options ("none": the fixed
+    # devices only). boot.scr picks one at boot.
+    for opt in ${EPP_XEN_ZEPHYR_PT_COMBOS}; do
         devs="${EPP_XEN_ZEPHYR_PT_FIXED}"
-        [ "$opt" = none ] || devs="$devs $opt"
+        [ "$opt" = none ] || devs="$devs $(echo $opt | tr _ ' ')"
 
         # Partial device tree for the Zephyr DomU (/chosen/domU2 module
         # multiboot,device-tree): the /gic placeholder Xen expects, and the

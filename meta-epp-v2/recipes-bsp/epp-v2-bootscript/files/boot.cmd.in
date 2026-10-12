@@ -18,7 +18,7 @@
 #   setenv epp_fdtfile imx95-15x15-frdm.dtb
 #   setenv epp_xen no                 # boot partition 2 without Xen
 #   setenv epp_xen_bootargs "..."     # Xen command line
-#   setenv epp_zephyr_pt lpi2c6       # passthrough option (see below)
+#   setenv epp_zephyr_pt lpi2c5_lpi2c6   # passthrough combination (see below)
 
 echo "epp-v2: boot script"
 
@@ -57,14 +57,15 @@ fi
 if test -z "${epp_zephyr_domu}"; then
     setenv epp_zephyr_domu "@@EPP_XEN_ZEPHYR@@"
 fi
-# Hardware passthrough to the Zephyr DomU: the fixed devices (GPIO2) and at
-# most one selectable device. epp_zephyr_pt is the option ("none" or a
-# device name): set at the prompt, else from epp-passthrough.txt on the boot
-# partition (written by epp-passthrough in Dom0), else the build default
-# (EPP_XEN_ZEPHYR_PASSTHROUGH). 'run epp_pt_<option>' sets epp_pt_paths (host
-# nodes) and epp_pt_names; the matching partial device tree and pin mux
-# overlay are xen-pt/epp-zephyr-pt-<option>.dtb and
-# overlays/epp-zephyr-pt-pins-<option>.dtbo.
+# Hardware passthrough to the Zephyr DomU: the fixed devices (GPIO2) and any
+# combination of the selectable devices. epp_zephyr_pt names the combination
+# ("none", or the devices joined with "_" in layer.conf order, e.g.
+# lpi2c5_lpi2c6): set at the prompt, else from epp-passthrough.txt on the
+# boot partition (written by epp-passthrough in Dom0), else the build default
+# (EPP_XEN_ZEPHYR_PASSTHROUGH). 'run epp_pt_<combination>' sets epp_pt_paths
+# (host nodes) and epp_pt_names; the matching partial device tree and pin
+# mux overlay are xen-pt/epp-zephyr-pt-<combination>.dtb and
+# overlays/epp-zephyr-pt-pins-<combination>.dtbo.
 @@EPP_XEN_ZEPHYR_PT_MAP@@
 if test -z "${epp_zephyr_pt}"; then
     if load ${epp_devtype} ${epp_devpart} ${fdtoverlay_addr_r} epp-passthrough.txt; then
@@ -120,9 +121,9 @@ if load ${epp_devtype} ${epp_devpart} ${epp_kernel_addr} ${image}; then
         if load ${epp_devtype} ${epp_devpart} ${epp_zephyr_addr} zephyr-domu.bin; then
             setenv epp_zephyr_size ${filesize}
             if run epp_pt_${epp_zephyr_pt}; then
-                echo "epp-v2: Zephyr DomU passthrough: ${epp_pt_names} (option ${epp_zephyr_pt})"
+                echo "epp-v2: Zephyr DomU passthrough: ${epp_pt_names}"
             else
-                echo "epp-v2: WARNING unknown passthrough option '${epp_zephyr_pt}', using none"
+                echo "epp-v2: WARNING unknown passthrough '${epp_zephyr_pt}', using none"
                 setenv epp_zephyr_pt none
                 run epp_pt_none
             fi

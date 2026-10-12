@@ -25,17 +25,15 @@ EPP_XEN_ZEPHYR = "${@'yes' if d.getVar('EPP_XEN_ZEPHYR_IMAGE_PATH') else 'no'}"
 EPP_XEN_ZEPHYR_MEM_KB = "${@hex(int(d.getVar('EPP_XEN_ZEPHYR_MEM')) * 1024)}"
 # Dedicated core for the Zephyr DomU: CPU node of core N is /cpus/cpu@N00
 EPP_XEN_ZEPHYR_CPU_NODE = "${@('/cpus/cpu@%s00' % d.getVar('EPP_XEN_ZEPHYR_CPU')) if d.getVar('EPP_XEN_ZEPHYR_CPU') else ''}"
-# Passthrough option selected when nothing else is (see boot.cmd.in)
-EPP_XEN_ZEPHYR_PT_DEFAULT = "${@d.getVar('EPP_XEN_ZEPHYR_PASSTHROUGH') or 'none'}"
-
-# Per passthrough option (layer.conf) a U-Boot command that sets the host
-# nodes to pass through (epp_pt_paths) and their names (epp_pt_names):
-#   setenv epp_pt_lpi2c6 'setenv epp_pt_paths "/soc/gpio@... /soc/..."; setenv epp_pt_names gpio2,lpi2c6'
+# Per passthrough combination (layer.conf, EPP_XEN_ZEPHYR_PT_COMBOS) a U-Boot
+# command that sets the host nodes to pass through (epp_pt_paths) and their
+# names (epp_pt_names); the default combination is EPP_XEN_ZEPHYR_PT_DEFAULT:
+#   setenv epp_pt_lpi2c5_lpi2c6 'setenv epp_pt_paths "/soc/gpio@... /soc/... /soc/..."; setenv epp_pt_names gpio2,lpi2c5,lpi2c6'
 python do_epp_pt_map() {
     fixed = d.getVar('EPP_XEN_ZEPHYR_PT_FIXED').split()
     lines = []
-    for opt in ['none'] + d.getVar('EPP_XEN_ZEPHYR_PT_OPTIONS').split():
-        devs = fixed + ([] if opt == 'none' else [opt])
+    for opt in d.getVar('EPP_XEN_ZEPHYR_PT_COMBOS').split():
+        devs = fixed + ([] if opt == 'none' else opt.split('_'))
         nodes = []
         for n in devs:
             node = d.getVarFlag('EPP_XEN_ZEPHYR_PT_NODE', n)
@@ -49,7 +47,7 @@ python do_epp_pt_map() {
 }
 # Varflags read by name in a loop are not tracked by bitbake: depend on them
 EPP_PT_NODES_ALL = "${@' '.join('%s:%s' % (n, d.getVarFlag('EPP_XEN_ZEPHYR_PT_NODE', n)) for n in (d.getVar('EPP_XEN_ZEPHYR_PT_FIXED') + ' ' + d.getVar('EPP_XEN_ZEPHYR_PT_OPTIONS')).split())}"
-do_epp_pt_map[vardeps] += "EPP_XEN_ZEPHYR_PT_FIXED EPP_XEN_ZEPHYR_PT_OPTIONS EPP_PT_NODES_ALL"
+do_epp_pt_map[vardeps] += "EPP_XEN_ZEPHYR_PT_FIXED EPP_XEN_ZEPHYR_PT_COMBOS EPP_PT_NODES_ALL"
 addtask epp_pt_map after do_configure before do_compile
 
 # Rebuild the script when the board settings change

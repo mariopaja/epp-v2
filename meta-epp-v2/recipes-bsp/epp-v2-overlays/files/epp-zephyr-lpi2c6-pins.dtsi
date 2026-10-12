@@ -4,7 +4,7 @@
  * pin 5 (GPIO_IO03, SCL) as LPI2C6, same pad settings as the board's other
  * I2C buses. The board has no pull-ups on these lines (R660-R663 not
  * fitted): the connected module must have them. Part of
- * epp-zephyr-pt-pins.dtso (SCMI pinctrl hog, set once when Dom0 boots).
+ * epp-zephyr-pt-pins-<option>.dtso (SCMI pinctrl hog, set once when Dom0 boots).
  */
 
 pinctrl_epp_lpi2c6: epplpi2c6grp {
