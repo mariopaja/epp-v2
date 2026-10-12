@@ -225,8 +225,11 @@ the options, selected on the board:
 | `lpi2c5` (option) | LPI2C5 (disabled in Linux) | `0x426b0000` | I2C of the 40-pin header J19: pin 27 SDA (GPIO_IO00), pin 28 SCL (GPIO_IO01) | `epp,xen-lpi2c` |
 | `lpi2c6` (option) | LPI2C6 (disabled in Linux) | `0x426c0000` | I2C of the 40-pin header J19: pin 3 SDA (GPIO_IO02), pin 5 SCL (GPIO_IO03) | `epp,xen-lpi2c` |
 | `lpi2c7` (option) | LPI2C7 (disabled in Linux) | `0x426d0000` | I2C of the 40-pin header J19: pin 31 SDA (GPIO_IO06), pin 26 SCL (GPIO_IO07) | `epp,xen-lpi2c` |
+| `lpspi7` (option) | LPSPI7 (disabled in Linux) | `0x42710000` | SPI of the 40-pin header J19: SCK pin 26, MOSI pin 31, MISO pin 29, chip select pin 35 (GPIO2 19), reset pin 37 (GPIO2 26) | `epp,xen-lpspi` |
 
-The options use different pins and controllers, so any combination works.
+Any combination works, except `lpi2c7` with `lpspi7`: both use pins 31/26
+(`EPP_XEN_ZEPHYR_PT_CONFLICTS` in layer.conf). `epp-passthrough` refuses to
+select both.
 
 ### Selecting the passthrough
 
@@ -268,8 +271,8 @@ boot. No rebuild is needed to switch.
 Nothing is passed through automatically, and Xen hands over whole register
 blocks, not single pins or bus addresses: the DomU gets all 32 pins of
 GPIO2, or the whole I2C bus with every device on it. The build prepares
-every combination of the options (16 for four options); `boot.scr` picks
-the selected one:
+every combination of the options that does not contain a conflicting pair
+(24 for the five options); `boot.scr` picks the selected one:
 
 1. **Xen:** `boot.scr` marks the host nodes `xen,passthrough`, so Xen takes
    them from Dom0, and loads the partial device tree
@@ -281,7 +284,8 @@ the selected one:
    `boot.scr` applies `overlays/epp-zephyr-pt-pins-<combination>.dtbo`, which
    sets them once at boot instead (SCMI pinctrl hog of Dom0): for `gpio2`
    the three LED pads, for `lpi2c4` GPIO_IO30/31, for `lpi2c5` GPIO_IO00/01,
-   for `lpi2c6` GPIO_IO02/03, for `lpi2c7` GPIO_IO06/07. To
+   for `lpi2c6` GPIO_IO02/03, for `lpi2c7` GPIO_IO06/07, for `lpspi7`
+   GPIO_IO05-07 and GPIO_IO19/26 (as GPIO). To
    use other GPIO2 pins of the 40-pin header, add their
    `IMX95_PAD_GPIO_IOxx__GPIO2_IO_BITxx` entries to
    `epp-zephyr-gpio2-pins.dtsi` and rebuild the image.
@@ -306,8 +310,10 @@ fragment pair each in `meta-epp-v2/recipes-bsp/epp-v2-overlays/files/`:
 From these the build generates the files per combination (`epp-v2-overlays`,
 combinations: `EPP_XEN_ZEPHYR_PT_COMBOS`), the combination table in
 `boot.scr` (`epp-v2-bootscript`) and the list of `epp-passthrough`
-(`epp-v2-xen-dom0`). Options must not share pins or controllers; each one
-doubles the number of combinations.
+(`epp-v2-xen-dom0`). Options that share pins or controllers go into
+`EPP_XEN_ZEPHYR_PT_CONFLICTS` (`a:b` pairs); the build leaves out their
+combinations and stops if the default selects both. Each option doubles the
+number of combinations.
 
 **Adding a device:** write the two fragments, add it to layer.conf and to the
 check in `scripts/yocto-build.sh`, and give Zephyr a driver and a node for
@@ -359,6 +365,39 @@ pins 15/16, which go through the board's select switches (schematic page
   application starts the bus only after Dom0 has written the passthrough
   list, so this is already over; other code must retry its first accesses.
 
+### SPI on the 40-pin header (`lpspi7`)
+
+| J19 pin | Signal |
+|---|---|
+| 26 | SCK (GPIO_IO07) |
+| 31 | MOSI / SOUT (GPIO_IO06) |
+| 29 | MISO / SIN (GPIO_IO05) |
+| 35 | chip select (GPIO_IO19, GPIO2 19, active low) |
+| 37 | device reset (GPIO_IO26, GPIO2 26, active low), optional |
+| 17 / 20 | 3.3 V / GND |
+
+LPSPI7's own chip select (PCS0) is on GPIO_IO04, the green LED, so the
+chip select is a GPIO2 pin driven by the driver (`cs-gpios`). Other SPI
+pins of the header: LPSPI6 (pins 5/3/28/27) uses the pins of `lpi2c6` and
+`lpi2c5`; LPSPI3 (pins 23/19/21/24) goes through the board's analog switch
+U16 (schematic page 18), which connects the pins to the M.2 Wi-Fi slot
+unless "SPI3/GPIO select" of the GPIO expander is high.
+
+`xen_led_i2c_netfront` tests the bus every 10 s: without a device in a
+loopback test (jumper from MOSI pin 31 to MISO pin 29, no chip select);
+with `w5500.overlay` + `w5500.conf` a WIZnet W5500 Ethernet module (SCLK
+26, MOSI 31, MISO 29, SCSn 35, RSTn 37, INTn not connected): its version,
+PHY state and a MAC address register write and read back:
+
+```
+app: header spi: W5500 version 0x04 OK, link down, MAC write/read OK
+```
+
+This is a register test with its own compatible (`epp,w5500-test`), not
+Zephyr's W5500 Ethernet driver (`wiznet,w5500`): that driver and Zephyr's
+network stack access the chip at boot, before the application knows that
+`lpspi7` is passed through and before Dom0 has set the header pin mux.
+
 ### Drivers and samples
 
 The upstream NXP drivers need SCMI (clocks), pinctrl and the MCUX SoC
@@ -369,6 +408,7 @@ drivers:
 |---|---|
 | `CONFIG_EPP_XEN_RGPIO` | RGPIO, `epp,xen-rgpio`: inputs and outputs, no interrupts, no pull or open-drain flags (pad settings belong to the pin mux). The secure-only registers PCNS/PCNP must not be accessed from the DomU; reading them aborts |
 | `CONFIG_EPP_XEN_LPI2C` | LPI2C controller, `epp,xen-lpi2c`: 7-bit addresses, standard (100 kHz) and fast mode (400 kHz), polled. The SCL timing assumes the 24 MHz functional clock (`functional-clock-frequency`) |
+| `CONFIG_EPP_XEN_LPSPI` | LPSPI controller, `epp,xen-lpspi`: controller mode, 8-bit words, full duplex, SPI modes 0-3, MSB or LSB first, polled, chip select by GPIO (`cs-gpios`). SCK = 24 MHz / (2^prescale x (div + 2)), up to 12 MHz |
 
 | Sample | Needs | Does |
 |---|---|---|
@@ -386,6 +426,8 @@ Kconfig (its `Kconfig` and `prj.conf`), each in its own `#ifdef` block:
 | `CONFIG_EPP_LPI2C5` | header I2C pins 27/28: scan | on (follows the `lpi2c5` node) |
 | `CONFIG_EPP_LPI2C6` | header I2C pins 3/5: scan | on (follows the `lpi2c6` node) |
 | `CONFIG_EPP_LPI2C7` | header I2C pins 31/26: scan | on (follows the `lpi2c7` node) |
+| `CONFIG_EPP_LPSPI7` | header SPI: loopback test | on (follows the `lpspi7` node) |
+| `CONFIG_EPP_W5500` | W5500 register test on the header SPI instead of the loopback test (`w5500.overlay` + `w5500.conf`) | off |
 | `CONFIG_EPP_PCF8574` | PCF8574 module on pins 3/5 (below) | off |
 
 When Dom0 passes a bus through that is compiled out, the application says
@@ -455,4 +497,6 @@ Linux keeps all buses), `lpi2c4` (Linux loses `i2c-3`; with
 `CONFIG_EPP_LPI2C4` the display bus test passes, without it the bus is left
 alone), `lpi2c5 lpi2c6 lpi2c7` together (all three buses started, PCF8574
 found on pins 3/5; pins 27/28 and 31/26 scanned without a bus error, but
-with no device connected there yet).
+with no device connected there yet), `lpi2c6 lpspi7` with a W5500 module
+(version 0x04, MAC register write and read back correct), and
+`epp-passthrough` refusing `lpi2c7` together with `lpspi7`.

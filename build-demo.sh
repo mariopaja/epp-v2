@@ -53,8 +53,8 @@ APP_DIR="${EPP_DIR}/zephyr/samples/${ZEPHYR_APP}"
 [ -n "${PASSTHROUGH}" ] || PASSTHROUGH=none
 for pt in ${PASSTHROUGH}; do
     case "${pt}" in
-        none|lpi2c4|lpi2c5|lpi2c6|lpi2c7) ;;
-        *) die "${PRESET}: PASSTHROUGH: unknown device '${pt}' (none, lpi2c4, lpi2c5, lpi2c6, lpi2c7)" ;;
+        none|lpi2c4|lpi2c5|lpi2c6|lpi2c7|lpspi7) ;;
+        *) die "${PRESET}: PASSTHROUGH: unknown device '${pt}' (none, lpi2c4, lpi2c5, lpi2c6, lpi2c7, lpspi7)" ;;
     esac
 done
 
