@@ -34,8 +34,8 @@ EPP_LINUX_NAME = "${EPP_HOSTNAME}"
 
 # Passthrough devices for epp-passthrough (layer.conf), one per line:
 # fixed:<name>:<description>, option:<name>:<description> (in layer.conf
-# order), default:<combination>
-EPP_PT_LIST = "${@'|'.join(['fixed:%s:%s' % (n, d.getVarFlag('EPP_XEN_ZEPHYR_PT_DESC', n) or '') for n in d.getVar('EPP_XEN_ZEPHYR_PT_FIXED').split()] + ['option:%s:%s' % (n, d.getVarFlag('EPP_XEN_ZEPHYR_PT_DESC', n) or '') for n in d.getVar('EPP_XEN_ZEPHYR_PT_OPTIONS').split()] + ['default:%s' % d.getVar('EPP_XEN_ZEPHYR_PT_DEFAULT')])}"
+# order), conflict:<name>:<name>, default:<combination>
+EPP_PT_LIST = "${@'|'.join(['fixed:%s:%s' % (n, d.getVarFlag('EPP_XEN_ZEPHYR_PT_DESC', n) or '') for n in d.getVar('EPP_XEN_ZEPHYR_PT_FIXED').split()] + ['option:%s:%s' % (n, d.getVarFlag('EPP_XEN_ZEPHYR_PT_DESC', n) or '') for n in d.getVar('EPP_XEN_ZEPHYR_PT_OPTIONS').split()] + ['conflict:%s' % c for c in d.getVar('EPP_XEN_ZEPHYR_PT_CONFLICTS').split()] + ['default:%s' % d.getVar('EPP_XEN_ZEPHYR_PT_DEFAULT')])}"
 
 do_install[vardeps] += "EPP_XEN EPP_XEN_LINUX_MEM EPP_XEN_LINUX_VCPUS EPP_XEN_UPLINK EPP_DOMU_DISK \
                         EPP_LINUX_NAME EPP_PT_LIST"

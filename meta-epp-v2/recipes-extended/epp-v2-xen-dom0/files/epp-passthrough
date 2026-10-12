@@ -20,6 +20,17 @@ fixed=$(names fixed)
 default=$(grep '^default:' "$LIST" | cut -d: -f2)
 desc() { grep -E "^(fixed|option):$1:" "$LIST" | cut -d: -f3-; }
 valid() { for o in $options; do [ "$o" = "$1" ] && return 0; done; return 1; }
+# The option of $2 (a list) that conflicts with option $1 (shared pins), if any
+conflict_with() {
+    for c in $(grep '^conflict:' "$LIST" | cut -d: -f2-); do
+        a=${c%:*}; b=${c#*:}
+        for o in $2; do
+            if { [ "$1" = "$a" ] && [ "$o" = "$b" ]; } || { [ "$1" = "$b" ] && [ "$o" = "$a" ]; }; then
+                echo "$o"; return
+            fi
+        done
+    done
+}
 
 # A selection is stored as the combination name boot.scr knows: the options
 # in list order joined with "_", or "none"
@@ -86,7 +97,11 @@ case "$1" in
     "") ;;
     *)
         if [ "$*" != none ]; then
-            for o in "$@"; do valid "$o" || die "unknown option '$o' ($options)"; done
+            for o in "$@"; do
+                valid "$o" || die "unknown option '$o' ($options)"
+                c=$(conflict_with "$o" "$*")
+                [ -z "$c" ] || die "$o and $c use the same pins, select only one"
+            done
         fi
         c=$(combo "$@")
         with_boot write_selected "$c" || die "cannot write $FILE"
@@ -121,7 +136,14 @@ while true; do
                 if [ "$i" = "$key" ]; then
                     case " $choice " in
                         *" $o "*) choice=$(echo " $choice " | sed "s/ $o / /") ;;
-                        *) choice="$choice $o" ;;
+                        *)
+                            c=$(conflict_with "$o" "$choice")
+                            if [ -n "$c" ]; then
+                                echo
+                                echo "  $o and $c use the same pins: untick $c first"
+                            else
+                                choice="$choice $o"
+                            fi ;;
                     esac
                 fi
                 i=$((i + 1))
