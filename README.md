@@ -52,6 +52,8 @@ epp-v2/
         ├── epp-v2-m7-firmware/           # EPP_M7_IMAGE -> m7_image.bin in imx-boot
         ├── epp-v2-xen-zephyr/            # EPP_XEN_ZEPHYR_IMAGE -> zephyr-domu.bin
         ├── imx-mkimage/                  # imx-boot: depend on epp-v2-m7-firmware
+        ├── u-boot/                       # U-Boot: no EFI boot manager, header pins of
+        │                                 # EPP_XEN_ZEPHYR_EARLY_PINS in its pinctrl hog
         ├── epp-v2-overlays/              # device tree overlays (*.dtso), Xen
         │                                 # Xen passthrough fragments (*-pt.dtsi, *-pins.dtsi)
         │                                 # (devices: conf/layer.conf)
@@ -162,6 +164,7 @@ SKIP_SYNC=1 ./build-demo.sh led              # without the repo sync
 | `header-i2c` | + I2C scan on the 40-pin header, pins 3/5 | `lpi2c6` |
 | `header-i2c-all` | + I2C scan of all three header buses | `lpi2c5 lpi2c6 lpi2c7` |
 | `header-spi-w5500` | + W5500 register test on the header SPI, I2C scan pins 3/5 | `lpi2c6 lpspi7` |
+| `header-spi-w5500-eth` | + W5500 as second network interface (Zephyr's driver, DHCP); pins set by U-Boot | `lpi2c6 lpspi7` |
 | `header-pcf8574` | + PCF8574 module at 0x20 on the header, P0-P7 cycled | `lpi2c6` |
 | `display-i2c` | + display bus test (Linux loses HDMI) | `lpi2c4` |
 
@@ -173,13 +176,15 @@ DESCRIPTION="LED + network + PCF8574 module at 0x20 on the header, P0-P7 cycled 
 ZEPHYR_APP=xen_led_i2c_netfront              # in zephyr/samples/
 ZEPHYR_EXTRA="pcf8574.overlay pcf8574.conf"  # extra overlays / Kconfig fragments from its directory
 PASSTHROUGH=lpi2c6                           # default next to GPIO2: none, or any of lpi2c4 lpi2c5 lpi2c6 lpi2c7 lpspi7
+EARLY_PINS=""                                # header pins U-Boot sets at boot (EPP_XEN_ZEPHYR_EARLY_PINS)
 ```
 
 The passthrough is only the default: on the board, `epp-passthrough` in Dom0
 switches it (see [zephyr/README.md](zephyr/README.md)).
 
 `--update [host]` is for a board that already runs an image of this version
-and only needs another Zephyr application: it copies the image to the boot
+and only needs another Zephyr application (a preset with `EARLY_PINS` needs
+a full build and flash once, as it changes U-Boot): it copies the image to the boot
 partition as `zephyr-domu.bin` over SSH (`root@` `EPP_BOARD_HOST`, default
 `epp-v2-dom0`), selects the preset's passthrough with `epp-passthrough` and
 reboots the board.
@@ -273,6 +278,7 @@ sudo bmaptool copy images/epp-v2-sdcard.wic.zst /dev/sdX
 | `EPP_XEN_ZEPHYR_IMAGE` | empty | Zephyr image (raw `zephyr.bin` for `xenvm/xenvm/gicv3`, path inside this repo, e.g. `xen/zephyr.bin`) started as second DomU with `--xen=dom0less`. `EPP_XEN_ZEPHYR_VCPUS` / `EPP_XEN_ZEPHYR_MEM` (MB) set its resources |
 | `EPP_XEN_ZEPHYR_CPU` | `5` | Physical A55 core (1-5) reserved for the Zephyr DomU: own Xen cpupool with the `null` scheduler, so its vCPU always runs on that core and no other domain does. Empty: shared cores (credit2). Core 0 is Xen's boot CPU |
 | `EPP_XEN_ZEPHYR_PASSTHROUGH` | empty | Default passthrough to the Zephyr DomU next to GPIO2 (always), space separated: `lpi2c4` (display I2C bus, Linux loses HDMI), `lpi2c5`, `lpi2c6`, `lpi2c7` (I2C of the 40-pin header, pins 27/28, 3/5, 31/26; no pull-ups on the board), `lpspi7` (SPI of the 40-pin header, not with `lpi2c7`); empty: GPIO2 only. Switch on the board with `epp-passthrough` in Dom0 |
+| `EPP_XEN_ZEPHYR_EARLY_PINS` | empty | Header pins U-Boot switches at boot for these passthrough devices (`lpi2c5`, `lpi2c6`, `lpi2c7`, `lpspi7`), for Zephyr drivers that access their device at boot (W5500 Ethernet driver: `lpspi7`). Changes U-Boot: flash the whole card. See [zephyr/README.md](zephyr/README.md) |
 | `EPP_M7_IMAGE` | empty | Cortex-M7 firmware (raw `.bin`, path inside this repo, e.g. `m7/zephyr.bin`) packed into the boot container and started by the System Manager at power-on. Empty: NXP's M7 demo. `none`: no M7 image, M7 off. Update only the M7 on a flashed card: `./flash-sd.sh --m7 <file\|none>`. See [zephyr/README.md](zephyr/README.md) |
 
 `scripts/yocto-build.sh` turns these into `conf/auto.conf` in the build

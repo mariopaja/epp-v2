@@ -393,10 +393,34 @@ PHY state and a MAC address register write and read back:
 app: header spi: W5500 version 0x04 OK, link down, MAC write/read OK
 ```
 
-This is a register test with its own compatible (`epp,w5500-test`), not
-Zephyr's W5500 Ethernet driver (`wiznet,w5500`): that driver and Zephyr's
-network stack access the chip at boot, before the application knows that
-`lpspi7` is passed through and before Dom0 has set the header pin mux.
+This is a register test with its own compatible (`epp,w5500-test`), so that
+no driver binds to the chip.
+
+**W5500 as a network interface:** with `w5500-eth.overlay` +
+`w5500-eth.conf` (preset `header-spi-w5500-eth`) the node is a real
+`wiznet,w5500` with Zephyr's W5500 Ethernet driver (polling mode, INTn not
+connected, random MAC address): a second network interface next to
+netfront, with its own Ethernet port and DHCP:
+
+```
+app: net: carrier on, mac 00:16:3e:04:05:8d, ipv4 10.10.193.132
+app: w5500: carrier on, mac 42:f9:d1:a6:7f:3d, ipv4 10.10.193.6
+```
+
+Zephyr's network stack and this driver access the chip at boot, so two
+things change compared with the other parts:
+
+- **LPSPI7 starts at boot**, not deferred: the image needs `lpspi7` passed
+  through. Without it (unticked in `epp-passthrough`) Zephyr aborts at its
+  first SPI access.
+- **U-Boot sets the header pins.** Dom0 switches them only about 5 s after
+  Xen has started the Zephyr DomU. `EPP_XEN_ZEPHYR_EARLY_PINS="lpspi7"` in
+  [board.conf](../board.conf) (preset: `EARLY_PINS`) adds the pin groups of
+  these devices (the same `epp-zephyr-<name>-pins.dtsi` fragments) to the
+  pinctrl hog of U-Boot's device tree, which U-Boot applies over SCMI before
+  it starts Xen. This changes U-Boot in the boot container: flash the whole
+  card (`./flash-sd.sh`). The pins then stay switched for every passthrough
+  selection.
 
 ### Drivers and samples
 
@@ -428,6 +452,7 @@ Kconfig (its `Kconfig` and `prj.conf`), each in its own `#ifdef` block:
 | `CONFIG_EPP_LPI2C7` | header I2C pins 31/26: scan | on (follows the `lpi2c7` node) |
 | `CONFIG_EPP_LPSPI7` | header SPI: loopback test | on (follows the `lpspi7` node) |
 | `CONFIG_EPP_W5500` | W5500 register test on the header SPI instead of the loopback test (`w5500.overlay` + `w5500.conf`) | off |
+| `CONFIG_EPP_W5500_ETH` | W5500 as second network interface with Zephyr's driver, DHCP (`w5500-eth.overlay` + `w5500-eth.conf`; LPSPI7 starts at boot) | off |
 | `CONFIG_EPP_PCF8574` | PCF8574 module on pins 3/5 (below) | off |
 
 When Dom0 passes a bus through that is compiled out, the application says
@@ -499,4 +524,6 @@ alone), `lpi2c5 lpi2c6 lpi2c7` together (all three buses started, PCF8574
 found on pins 3/5; pins 27/28 and 31/26 scanned without a bus error, but
 with no device connected there yet), `lpi2c6 lpspi7` with a W5500 module
 (version 0x04, MAC register write and read back correct), and
-`epp-passthrough` refusing `lpi2c7` together with `lpspi7`.
+`epp-passthrough` refusing `lpi2c7` together with `lpspi7`; preset
+`header-spi-w5500-eth` (pins set by U-Boot, W5500 with Zephyr's driver:
+DHCP and ping from the LAN on both netfront and W5500).
