@@ -1,0 +1,23 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Dom0 fragment "lpuart7": header pins 19/21/23/24 (GPIO_IO08-11) go through
+ * the board's switch U16 (schematic page 18) to the header only while
+ * "SPI3/GPIO select" (GPIO expander line 2) is high; low connects them to
+ * the M.2 slot's SPI. The FRDM device tree's gpio-hog drives it low
+ * (output-low). An overlay cannot delete that property, so make the line
+ * active low: the same output-low now drives it high.
+ *
+ * The FRDM device tree also enables LPSPI3 (spidev for the M.2 slot), whose
+ * pin group claims GPIO_IO08-11; Linux would apply it after the pinctrl hog
+ * and take the UART pads back. Disable it in Dom0.
+ */
+
+&pcal6524 {
+	lpspi-gpio-sel-hog {
+		gpios = <2 1>;	/* GPIO_ACTIVE_LOW */
+	};
+};
+
+&lpspi3 {
+	status = "disabled";
+};

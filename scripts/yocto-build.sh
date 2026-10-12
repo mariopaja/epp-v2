@@ -124,8 +124,8 @@ if [ -n "${EPP_XEN_ZEPHYR_IMAGE}" ] && [ "${EPP_XEN}" = "dom0less" ]; then
     [ "${EPP_XEN_ZEPHYR_PASSTHROUGH}" = none ] && EPP_XEN_ZEPHYR_PASSTHROUGH=""
     for pt in ${EPP_XEN_ZEPHYR_PASSTHROUGH}; do
         case "${pt}" in
-            lpi2c4|lpi2c5|lpi2c6|lpi2c7|lpspi7|flexcan2) ;;
-            *) echo "Error: EPP_XEN_ZEPHYR_PASSTHROUGH: unknown device '${pt}' (lpi2c4, lpi2c5, lpi2c6, lpi2c7, lpspi7, flexcan2; gpio2 is always passed through)" >&2; exit 1 ;;
+            lpi2c4|lpi2c5|lpi2c6|lpi2c7|lpspi7|flexcan2|lpuart7) ;;
+            *) echo "Error: EPP_XEN_ZEPHYR_PASSTHROUGH: unknown device '${pt}' (lpi2c4, lpi2c5, lpi2c6, lpi2c7, lpspi7, flexcan2, lpuart7; gpio2 is always passed through)" >&2; exit 1 ;;
         esac
     done
     echo "Zephyr DomU passthrough: gpio2${EPP_XEN_ZEPHYR_PASSTHROUGH:+ ${EPP_XEN_ZEPHYR_PASSTHROUGH}} (default, change in Dom0 with epp-passthrough)"

@@ -1,0 +1,15 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Pin mux fragment "lpuart7": GPIO_IO08 (TX, header pin 24) and GPIO_IO09
+ * (RX, header pin 21) as LPUART7. They reach the header through the board's
+ * switch U16 only while "SPI3/GPIO select" is high (epp-zephyr-lpuart7-
+ * dom0.dtsi). Part of epp-zephyr-pt-pins-<combination>.dtso (SCMI pinctrl
+ * hog, set once when Dom0 boots).
+ */
+
+pinctrl_epp_lpuart7: epplpuart7grp {
+	fsl,pins = <
+		IMX95_PAD_GPIO_IO08__LPUART7_TX		0x31e
+		IMX95_PAD_GPIO_IO09__LPUART7_RX		0x31e
+	>;
+};
