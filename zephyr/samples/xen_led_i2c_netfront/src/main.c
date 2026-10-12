@@ -21,6 +21,10 @@
  *                       loopback test)
  *   CONFIG_EPP_W5500_ETH W5500 module on lpspi7 as second network
  *                       interface (Zephyr's W5500 driver), DHCP
+ *   CONFIG_EPP_FLEXCAN2 flexcan2, CAN2 (J20): heartbeat 0x123 every second,
+ *                       ID 0x100 answered on 0x101 with the same data;
+ *                       with CONFIG_EPP_FLEXCAN2_LOOPBACK in loopback mode
+ *                       (own frames received, request 0x100 every 10 s)
  *   CONFIG_EPP_PCF8574  PCF8574 module on pins 3/5: its pins P0-P7 go high
  *                       one after the other, then all high, then all low,
  *                       every step read back
@@ -34,6 +38,7 @@
 #include <string.h>
 #include <epp/xen/xenstore.h>
 #include <zephyr/device.h>
+#include <zephyr/drivers/can.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/spi.h>
@@ -41,6 +46,7 @@
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/net_ip.h>
 #include <zephyr/net/dhcpv4.h>
+#include <zephyr/sys/byteorder.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/sys/util.h>
 
@@ -446,6 +452,159 @@ static void spi_report(uint32_t round)
 }
 #endif /* CONFIG_EPP_LPSPI7 */
 
+/* ---- flexcan2: CAN2, connector J20 -------------------------------------- */
+
+#ifdef CONFIG_EPP_FLEXCAN2
+#define CAN_ID_HEARTBEAT 0x123
+#define CAN_ID_REQUEST   0x100
+#define CAN_ID_ANSWER    0x101
+
+static const struct device *const can_dev = DEVICE_DT_GET(DT_NODELABEL(flexcan2));
+static atomic_t can_on;
+static atomic_t can_tx;
+static atomic_t can_rx;
+static struct can_frame can_last;  /* last received frame, under can_lock */
+static struct k_spinlock can_lock;
+K_MSGQ_DEFINE(can_requests, sizeof(struct can_frame), 4, 4);
+
+/*
+ * Sending never blocks: with a callback can_send() returns as soon as the
+ * frame is in the transmit mailbox. Without one it would wait until the
+ * frame is sent, which is forever while no other node acknowledges (Linux's
+ * can0 down, no wiring): the controller keeps retransmitting.
+ */
+static void can_sent(const struct device *dev, int error, void *user_data)
+{
+	ARG_UNUSED(dev);
+	ARG_UNUSED(user_data);
+	if (error == 0) {
+		atomic_inc(&can_tx);
+	}
+}
+
+static void can_answer(struct k_work *work)
+{
+	struct can_frame frame;
+
+	ARG_UNUSED(work);
+	while (k_msgq_get(&can_requests, &frame, K_NO_WAIT) == 0) {
+		frame.id = CAN_ID_ANSWER;
+		(void)can_send(can_dev, &frame, K_MSEC(100), can_sent, NULL);
+	}
+}
+
+static K_WORK_DEFINE(can_answer_work, can_answer);
+
+/* Runs in the driver's interrupt handler */
+static void can_received(const struct device *dev, struct can_frame *frame, void *user_data)
+{
+	k_spinlock_key_t key = k_spin_lock(&can_lock);
+
+	ARG_UNUSED(dev);
+	ARG_UNUSED(user_data);
+	can_last = *frame;
+	k_spin_unlock(&can_lock, key);
+	atomic_inc(&can_rx);
+
+	if (((frame->flags & CAN_FRAME_IDE) == 0U) && (frame->id == CAN_ID_REQUEST) &&
+	    (k_msgq_put(&can_requests, frame, K_NO_WAIT) == 0)) {
+		k_work_submit(&can_answer_work);
+	}
+}
+
+static void can_start_bus(void)
+{
+	const struct can_filter all_std = {.id = 0, .mask = 0, .flags = 0};
+	const struct can_filter all_ext = {.id = 0, .mask = 0, .flags = CAN_FILTER_IDE};
+	int ret;
+
+	if (!start_device(can_dev, "flexcan2")) {
+		return;
+	}
+#ifdef CONFIG_EPP_FLEXCAN2_LOOPBACK
+	ret = can_set_mode(can_dev, CAN_MODE_LOOPBACK);
+	if (ret != 0) {
+		printk("app: can: loopback mode failed (%d)\n", ret);
+		return;
+	}
+#endif
+	if ((can_add_rx_filter(can_dev, can_received, NULL, &all_std) < 0) ||
+	    (can_add_rx_filter(can_dev, can_received, NULL, &all_ext) < 0)) {
+		printk("app: can: adding filters failed\n");
+		return;
+	}
+	ret = can_start(can_dev);
+	if (ret != 0) {
+		printk("app: can: start failed (%d)\n", ret);
+		return;
+	}
+	atomic_set(&can_on, 1);
+}
+
+/* Every second: heartbeat with a counter (big endian) */
+static void can_heartbeat(uint32_t count)
+{
+	struct can_frame frame = {.id = CAN_ID_HEARTBEAT, .dlc = 4};
+
+	if (!atomic_get(&can_on)) {
+		return;
+	}
+	sys_put_be32(count, frame.data);
+	/* Skipped while the previous frame is still pending */
+	(void)can_send(can_dev, &frame, K_NO_WAIT, can_sent, NULL);
+}
+
+static void can_report(void)
+{
+	static const char *const names[] = {"error-active", "error-warning", "error-passive",
+					    "bus-off", "stopped"};
+	struct can_bus_err_cnt cnt = {0};
+	enum can_state state = CAN_STATE_STOPPED;
+	struct can_frame last;
+	k_spinlock_key_t key;
+
+	if (!atomic_get(&can_on)) {
+		return;
+	}
+#ifdef CONFIG_EPP_FLEXCAN2_LOOPBACK
+	/* A request to ourselves: received, answered on 0x101, received */
+	struct can_frame request = {.id = CAN_ID_REQUEST, .dlc = 2, .data = {0xca, 0xfe}};
+
+	(void)can_send(can_dev, &request, K_MSEC(100), can_sent, NULL);
+#endif
+	(void)can_get_state(can_dev, &state, &cnt);
+	key = k_spin_lock(&can_lock);
+	last = can_last;
+	k_spin_unlock(&can_lock, key);
+
+	printk("app: can (J20%s): %s (tx err %u, rx err %u), sent %ld, received %ld",
+	       IS_ENABLED(CONFIG_EPP_FLEXCAN2_LOOPBACK) ? ", loopback" : "", names[state],
+	       cnt.tx_err_cnt, cnt.rx_err_cnt, (long)atomic_get(&can_tx),
+	       (long)atomic_get(&can_rx));
+	if (atomic_get(&can_rx) > 0) {
+		printk(", last 0x%03x [%u]", last.id, last.dlc);
+		for (uint8_t i = 0U; i < last.dlc; i++) {
+			printk(" %02x", last.data[i]);
+		}
+	}
+	printk("\n");
+}
+#else
+static void can_start_bus(void)
+{
+	printk("app: flexcan2 is passed through, but CONFIG_EPP_FLEXCAN2 is off\n");
+}
+
+static void can_heartbeat(uint32_t count)
+{
+	ARG_UNUSED(count);
+}
+
+static void can_report(void)
+{
+}
+#endif /* CONFIG_EPP_FLEXCAN2 */
+
 /* ---- passthrough list -------------------------------------------------- */
 
 /*
@@ -478,6 +637,9 @@ static void passthrough_thread(void *p1, void *p2, void *p3)
 	}
 	if (passed_through("lpspi7")) {
 		spi_start();
+	}
+	if (passed_through("flexcan2")) {
+		can_start_bus();
 	}
 	header_start();
 #ifdef CONFIG_EPP_PCF8574
@@ -555,6 +717,7 @@ int main(void)
 				gpio_pin_set_dt(&leds[i], (steps[s].on >> i) & 1U);
 			}
 		}
+		can_heartbeat(round);
 		if ((round % 10U) == 0U) {
 			printk("app: [%u] LED %s, passthrough %s\n", round / 10U,
 			       leds_ok ? "cycling" : "off", passthrough);
@@ -564,6 +727,7 @@ int main(void)
 			display_report(round / 10U);
 			header_report();
 			spi_report(round / 10U);
+			can_report();
 		}
 		k_msleep(1000);
 	}

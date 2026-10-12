@@ -65,6 +65,26 @@ config EPP_W5500_ETH
 	  boot: lpspi7 must be passed through and its pins set by U-Boot.
 	  Set by w5500-eth.conf, together with w5500-eth.overlay.
 
+config EPP_FLEXCAN2
+	bool "CAN2 (FlexCAN2, connector J20, passthrough option flexcan2)"
+	default $(dt_nodelabel_enabled,flexcan2)
+	depends on $(dt_nodelabel_enabled,flexcan2)
+	select CAN
+	help
+	  CAN at 500 kbit/s: a heartbeat frame 0x123 every second (counter),
+	  frames with ID 0x100 are answered with the same data on ID 0x101.
+	  Every 10 s the state and counters. On when the flexcan2 node in
+	  app.overlay is "okay".
+
+config EPP_FLEXCAN2_LOOPBACK
+	bool "CAN2 in loopback mode (no bus needed)"
+	depends on EPP_FLEXCAN2
+	help
+	  Start FlexCAN2 in loopback mode: it receives its own frames
+	  internally, without transceiver and bus. Every 10 s the application
+	  also sends a request (0x100), so its answer (0x101) is received as
+	  well. Set by can-loopback.conf.
+
 config EPP_PCF8574
 	bool "PCF8574 I/O expander module on the header I2C"
 	depends on EPP_LPI2C6
