@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# Parts of the application. The I2C bus Xen passes through is selected in
+# Parts of the application. The I2C buses Xen passes through are selected in
 # Dom0 (epp-passthrough); a part only runs when its bus is passed through.
 
 mainmenu "epp-v2 Zephyr DomU: LED, network and I2C passthrough"
@@ -14,13 +14,29 @@ config EPP_LPI2C4
 	  read back a PCA9632 register. On when the lpi2c4 node in app.overlay
 	  is "okay" (disabled by default: the bus belongs to HDMI in Linux).
 
+config EPP_LPI2C5
+	bool "40-pin header I2C, pins 27/28 (LPI2C5, passthrough option lpi2c5)"
+	default $(dt_nodelabel_enabled,lpi2c5)
+	depends on $(dt_nodelabel_enabled,lpi2c5)
+	help
+	  Every 10 s: scan the bus. On when the lpi2c5 node in app.overlay is
+	  "okay".
+
 config EPP_LPI2C6
-	bool "40-pin header I2C (LPI2C6, passthrough option lpi2c6)"
+	bool "40-pin header I2C, pins 3/5 (LPI2C6, passthrough option lpi2c6)"
 	default $(dt_nodelabel_enabled,lpi2c6)
 	depends on $(dt_nodelabel_enabled,lpi2c6)
 	help
-	  Every 10 s: scan the I2C bus of the 40-pin header (pins 3/5). On
-	  when the lpi2c6 node in app.overlay is "okay".
+	  Every 10 s: scan the bus. On when the lpi2c6 node in app.overlay is
+	  "okay".
+
+config EPP_LPI2C7
+	bool "40-pin header I2C, pins 31/26 (LPI2C7, passthrough option lpi2c7)"
+	default $(dt_nodelabel_enabled,lpi2c7)
+	depends on $(dt_nodelabel_enabled,lpi2c7)
+	help
+	  Every 10 s: scan the bus. On when the lpi2c7 node in app.overlay is
+	  "okay".
 
 config EPP_PCF8574
 	bool "PCF8574 I/O expander module on the header I2C"

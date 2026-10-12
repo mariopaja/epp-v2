@@ -3,11 +3,12 @@
  *
  * Devices Xen can pass through to this DomU, at their physical addresses:
  * GPIO2 with the FRDM-IMX95 RGB LED D19 (green GPIO_IO04, blue GPIO_IO12,
- * red GPIO_IO13, active high), always; and one of LPI2C4 (display bus) or
- * LPI2C6 (40-pin header J19, pin 3 SDA, pin 5 SCL), selected in Dom0 with
+ * red GPIO_IO13, active high), always; and any of LPI2C4 (display bus) and
+ * the I2C buses of the 40-pin header J19, LPI2C5 (pins 27/28), LPI2C6
+ * (pins 3/5) and LPI2C7 (pins 31/26), selected in Dom0 with
  * epp-passthrough. Accessing a device that is not passed through aborts, so
  * the I2C buses are not initialized at boot (zephyr,deferred-init): the
- * application starts the one Dom0 lists in xenstore (epp/passthrough).
+ * application starts the ones Dom0 lists in xenstore (epp/passthrough).
  */
 
 #include <zephyr/dt-bindings/gpio/gpio.h>
@@ -39,7 +40,18 @@
 		status = "disabled";
 	};
 
-	lpi2c6: i2c@426c0000 {
+	/* I2C buses of the 40-pin header J19 */
+	lpi2c5: i2c@426b0000 {		/* pin 27 SDA, pin 28 SCL */
+		compatible = "epp,xen-lpi2c";
+		reg = <0x00 0x426b0000 0x00 0x10000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		clock-frequency = <I2C_BITRATE_STANDARD>;
+		zephyr,deferred-init;
+		status = "okay";
+	};
+
+	lpi2c6: i2c@426c0000 {		/* pin 3 SDA, pin 5 SCL */
 		compatible = "epp,xen-lpi2c";
 		reg = <0x00 0x426c0000 0x00 0x10000>;
 		#address-cells = <1>;
@@ -48,6 +60,16 @@
 		zephyr,deferred-init;
 		status = "okay";
 		/* Optional PCF8574 test module: pcf8574.overlay */
+	};
+
+	lpi2c7: i2c@426d0000 {		/* pin 31 SDA, pin 26 SCL */
+		compatible = "epp,xen-lpi2c";
+		reg = <0x00 0x426d0000 0x00 0x10000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		clock-frequency = <I2C_BITRATE_STANDARD>;
+		zephyr,deferred-init;
+		status = "okay";
 	};
 
 	leds {

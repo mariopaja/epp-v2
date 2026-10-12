@@ -5,13 +5,16 @@
  * Xen passes through: GPIO2 cycles the FRDM-IMX95 RGB LED D19 (red, green,
  * blue, white, off) every second. Which I2C bus is passed through as well
  * is selected in Dom0 (epp-passthrough) and listed by Dom0 in xenstore
- * (epp/passthrough, e.g. "gpio2,lpi2c6"); only that bus is started. The
- * parts for the buses are compiled in with Kconfig (see Kconfig):
+ * (epp/passthrough, e.g. "gpio2,lpi2c5,lpi2c6"); only those buses are
+ * started. The parts for the buses are compiled in with Kconfig (see
+ * Kconfig):
  *
  *   CONFIG_EPP_LPI2C4   lpi2c4, display bus: scan, IT6263 chip ID, PCA9632
  *                       register write and read back
- *   CONFIG_EPP_LPI2C6   lpi2c6, 40-pin header (pins 3/5): scan
- *   CONFIG_EPP_PCF8574  PCF8574 module on the header: its pins P0-P7 go high
+ *   CONFIG_EPP_LPI2C5   lpi2c5, 40-pin header pins 27/28: scan
+ *   CONFIG_EPP_LPI2C6   lpi2c6, 40-pin header pins 3/5: scan
+ *   CONFIG_EPP_LPI2C7   lpi2c7, 40-pin header pins 31/26: scan
+ *   CONFIG_EPP_PCF8574  PCF8574 module on pins 3/5: its pins P0-P7 go high
  *                       one after the other, then all high, then all low,
  *                       every step read back
  *
@@ -77,7 +80,6 @@ static bool start_device(const struct device *dev, const char *name)
 	return true;
 }
 
-#if defined(CONFIG_EPP_LPI2C4) || defined(CONFIG_EPP_LPI2C6)
 /* Print the addresses that answer on @p bus */
 static void scan(const struct device *bus, const char *label)
 {
@@ -99,7 +101,6 @@ static void scan(const struct device *bus, const char *label)
 	}
 	printk("%s\n", (found == 0) ? " no devices" : "");
 }
-#endif
 
 /* ---- lpi2c4: display bus ---------------------------------------------- */
 
@@ -155,7 +156,7 @@ static void display_report(uint32_t round)
 }
 #endif /* CONFIG_EPP_LPI2C4 */
 
-/* ---- lpi2c6: 40-pin header -------------------------------------------- */
+/* ---- 40-pin header: lpi2c5, lpi2c6, lpi2c7 ----------------------------- */
 
 #ifdef CONFIG_EPP_PCF8574
 BUILD_ASSERT(DT_NODE_HAS_PROP(DT_PATH(zephyr_user), pcf8574_gpios),
@@ -223,51 +224,80 @@ static void pcf8574_walk(void)
 }
 #endif /* CONFIG_EPP_PCF8574 */
 
+struct header_bus {
+	const char *name;  /* passthrough option */
+	const char *label;
+	const struct device *dev;
+	atomic_t on;
+};
+
+#define HEADER_BUS(n, pins)                                                                        \
+	{.name = "lpi2c" #n,                                                                       \
+	 .label = "header i2c (J19 pins " pins ")",                                                \
+	 .dev = DEVICE_DT_GET(DT_NODELABEL(lpi2c##n))},
+
+/* The header buses compiled in, each with its Kconfig option */
+static struct header_bus header_buses[] = {
+#ifdef CONFIG_EPP_LPI2C5
+	HEADER_BUS(5, "27/28")
+#endif
 #ifdef CONFIG_EPP_LPI2C6
-static const struct device *const header_i2c = DEVICE_DT_GET(DT_NODELABEL(lpi2c6));
-static atomic_t header_on;
+	HEADER_BUS(6, "3/5")
+#endif
+#ifdef CONFIG_EPP_LPI2C7
+	HEADER_BUS(7, "31/26")
+#endif
+};
 
-/* Runs in the passthrough thread; with the PCF8574 test it does not return */
+/* Start the passed-through header buses; runs in the passthrough thread */
 static void header_start(void)
 {
-	if (!start_device(header_i2c, "lpi2c6")) {
-		return;
+	static const char *const all[] = {"lpi2c5", "lpi2c6", "lpi2c7"};
+
+	for (size_t i = 0U; i < ARRAY_SIZE(all); i++) {
+		bool compiled = false;
+
+		for (size_t b = 0U; b < ARRAY_SIZE(header_buses); b++) {
+			struct header_bus *bus = &header_buses[b];
+
+			if (strcmp(bus->name, all[i]) != 0) {
+				continue;
+			}
+			compiled = true;
+			if (passed_through(bus->name) && start_device(bus->dev, bus->name)) {
+				atomic_set(&bus->on, 1);
+			}
+		}
+		if (!compiled && passed_through(all[i])) {
+			/* "lpi2c5" -> CONFIG_EPP_LPI2C5 */
+			printk("app: %s is passed through, but CONFIG_EPP_LPI2C%c is off\n",
+			       all[i], all[i][5]);
+		}
 	}
-	atomic_set(&header_on, 1);
-#ifdef CONFIG_EPP_PCF8574
-	pcf8574_walk();
-#endif
 }
 
 static void header_report(void)
 {
-	if (!atomic_get(&header_on)) {
-		return;
+	for (size_t b = 0U; b < ARRAY_SIZE(header_buses); b++) {
+		if (atomic_get(&header_buses[b].on)) {
+			scan(header_buses[b].dev, header_buses[b].label);
+		}
 	}
-	scan(header_i2c, "header i2c (J19 pins 3/5)");
 #ifdef CONFIG_EPP_PCF8574
-	printk("app: PCF8574 P0-P7 walk: %ld steps, %ld errors (ready after %ld s)\n",
-	       (long)atomic_get(&pcf_steps), (long)atomic_get(&pcf_errors),
-	       (long)atomic_get(&pcf_setup_s));
+	if (passed_through("lpi2c6")) {
+		printk("app: PCF8574 P0-P7 walk: %ld steps, %ld errors (ready after %ld s)\n",
+		       (long)atomic_get(&pcf_steps), (long)atomic_get(&pcf_errors),
+		       (long)atomic_get(&pcf_setup_s));
+	}
 #endif
 }
-#else
-static void header_start(void)
-{
-	printk("app: lpi2c6 is passed through, but CONFIG_EPP_LPI2C6 is off\n");
-}
-
-static void header_report(void)
-{
-}
-#endif /* CONFIG_EPP_LPI2C6 */
 
 /* ---- passthrough list -------------------------------------------------- */
 
 /*
  * Wait for the passthrough list from Dom0 (written by
  * epp-v2-dom0less-setup once Dom0 has booted), then start the listed I2C
- * bus. The header pins work only from then on as well: Dom0 sets their pin
+ * buses. The header pins work only from then on as well: Dom0 sets their pin
  * mux when its Linux boots.
  */
 static void passthrough_thread(void *p1, void *p2, void *p3)
@@ -292,9 +322,13 @@ static void passthrough_thread(void *p1, void *p2, void *p3)
 	if (passed_through("lpi2c4")) {
 		display_start();
 	}
+	header_start();
+#ifdef CONFIG_EPP_PCF8574
+	/* On lpi2c6 (pins 3/5); does not return */
 	if (passed_through("lpi2c6")) {
-		header_start();
+		pcf8574_walk();
 	}
+#endif
 }
 
 K_THREAD_DEFINE(pt_thread, 4096, passthrough_thread, NULL, NULL, NULL, 7, 0, 0);
