@@ -39,3 +39,10 @@ export DOCKER_MEMORY_SWAP="${DOCKER_MEMORY_SWAP-32g}"
 # cores busy within 24 GB; 24 x 24 ran out of memory (C++ compiles ~2 GB each).
 export BB_NUMBER_THREADS="${BB_NUMBER_THREADS:-8}"
 export PARALLEL_MAKE_JOBS="${PARALLEL_MAKE_JOBS:-12}"
+
+# Zephyr for build-demo.sh, built on the host: the west workspace (with the
+# Zephyr SDK installed and, if present, its Python venv in .venv), the board
+# of the Zephyr DomU, and the board to update with --update (Dom0)
+export ZEPHYR_WORKSPACE="${ZEPHYR_WORKSPACE:-${HOME}/dev/zephyrproject}"
+export ZEPHYR_DOMU_BOARD="${ZEPHYR_DOMU_BOARD:-xenvm/xenvm/gicv3}"
+export EPP_BOARD_HOST="${EPP_BOARD_HOST:-epp-v2-dom0}"

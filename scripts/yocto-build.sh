@@ -55,10 +55,16 @@ fi
 
 # Generate conf/auto.conf from board.conf (regenerated on every build, so
 # edit board.conf / config.sh rather than auto.conf).
-# EPP_M7_IMAGE from the environment (flash-sd.sh --m7) wins over board.conf
+# EPP_M7_IMAGE (flash-sd.sh --m7), EPP_XEN_ZEPHYR_IMAGE and
+# EPP_XEN_ZEPHYR_PASSTHROUGH (build-demo.sh) from the environment win over
+# board.conf
 EPP_M7_IMAGE_ENV="${EPP_M7_IMAGE}"
+EPP_XEN_ZEPHYR_IMAGE_ENV="${EPP_XEN_ZEPHYR_IMAGE}"
+EPP_XEN_ZEPHYR_PASSTHROUGH_ENV="${EPP_XEN_ZEPHYR_PASSTHROUGH}"
 source "${EPP_DIR}/board.conf"
 EPP_M7_IMAGE="${EPP_M7_IMAGE_ENV:-${EPP_M7_IMAGE}}"
+EPP_XEN_ZEPHYR_IMAGE="${EPP_XEN_ZEPHYR_IMAGE_ENV:-${EPP_XEN_ZEPHYR_IMAGE}}"
+EPP_XEN_ZEPHYR_PASSTHROUGH="${EPP_XEN_ZEPHYR_PASSTHROUGH_ENV:-${EPP_XEN_ZEPHYR_PASSTHROUGH}}"
 
 EPP_XEN="${EPP_XEN:-no}"
 case "${EPP_XEN}" in
