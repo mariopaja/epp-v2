@@ -285,7 +285,7 @@ every combination of the options that does not contain a conflicting pair
    sets them once at boot instead (SCMI pinctrl hog of Dom0): for `gpio2`
    the three LED pads, for `lpi2c4` GPIO_IO30/31, for `lpi2c5` GPIO_IO00/01,
    for `lpi2c6` GPIO_IO02/03, for `lpi2c7` GPIO_IO06/07, for `lpspi7`
-   GPIO_IO05-07 and GPIO_IO19/26 (as GPIO). To
+   GPIO_IO05-07 and GPIO_IO16/19/26 (as GPIO). To
    use other GPIO2 pins of the 40-pin header, add their
    `IMX95_PAD_GPIO_IOxx__GPIO2_IO_BITxx` entries to
    `epp-zephyr-gpio2-pins.dtsi` and rebuild the image.
@@ -318,8 +318,16 @@ number of combinations.
 **Adding a device:** write the two fragments, add it to layer.conf and to the
 check in `scripts/yocto-build.sh`, and give Zephyr a driver and a node for
 it. Only devices without DMA work: the SMMU is off for Xen, so a
-passed-through device that does DMA could write to any memory. The devices
-here are polled; their interrupts are not passed through.
+passed-through device that does DMA could write to any memory. The I2C and
+SPI controllers here are polled; their interrupts are not passed through.
+
+**Interrupts:** a device's interrupt goes to the DomU when its fragment has
+`interrupts` with `interrupt-parent = <0xfde8>` (65000, Xen's phandle for
+the guest GIC); Xen routes the physical SPI to the DomU under the same
+number, and Dom0 no longer gets it. `gpio2` does this for its first
+interrupt (GIC SPI 49), so Zephyr gets GPIO pin interrupts; the Zephyr node
+needs the same interrupt (`interrupts = <GIC_SPI 49 IRQ_TYPE_LEVEL
+IRQ_DEFAULT_PRIORITY>`).
 
 Clock and power stay with the System Manager: the GPIO2, LPI2C4 and LPI2C6
 clocks are on from boot (LPI2C: 24 MHz, hardware enable `Y` in
@@ -374,6 +382,7 @@ pins 15/16, which go through the board's select switches (schematic page
 | 29 | MISO / SIN (GPIO_IO05) |
 | 35 | chip select (GPIO_IO19, GPIO2 19, active low) |
 | 37 | device reset (GPIO_IO26, GPIO2 26, active low), optional |
+| 36 | device interrupt (GPIO_IO16, GPIO2 16, input with pull-up), optional |
 | 17 / 20 | 3.3 V / GND |
 
 LPSPI7's own chip select (PCS0) is on GPIO_IO04, the green LED, so the
@@ -398,13 +407,16 @@ no driver binds to the chip.
 
 **W5500 as a network interface:** with `w5500-eth.overlay` +
 `w5500-eth.conf` (preset `header-spi-w5500-eth`) the node is a real
-`wiznet,w5500` with Zephyr's W5500 Ethernet driver (polling mode, INTn not
-connected, random MAC address): a second network interface next to
-netfront, with its own Ethernet port and DHCP:
+`wiznet,w5500` with Zephyr's W5500 Ethernet driver (random MAC address):
+a second network interface next to netfront, with its own Ethernet port and
+DHCP. Its INTn goes to pin 36 (`int-gpios = <&gpio2 16
+GPIO_ACTIVE_LOW>`): the driver waits for the GPIO interrupt instead of
+polling the chip. Without that wire, remove `int-gpios` and the driver
+polls (log: "polling mode"; ping about 7 ms instead of 0.8 ms):
 
 ```
-app: net: carrier on, mac 00:16:3e:04:05:8d, ipv4 10.10.193.132
-app: w5500: carrier on, mac 42:f9:d1:a6:7f:3d, ipv4 10.10.193.6
+app: net: carrier on, mac 00:16:3e:12:ea:d9, ipv4 10.10.193.32
+app: w5500: carrier on, mac fa:7b:82:00:db:2b, ipv4 10.10.193.243
 ```
 
 Zephyr's network stack and this driver access the chip at boot, so two
@@ -430,7 +442,7 @@ drivers:
 
 | Kconfig | Driver |
 |---|---|
-| `CONFIG_EPP_XEN_RGPIO` | RGPIO, `epp,xen-rgpio`: inputs and outputs, no interrupts, no pull or open-drain flags (pad settings belong to the pin mux). The secure-only registers PCNS/PCNP must not be accessed from the DomU; reading them aborts |
+| `CONFIG_EPP_XEN_RGPIO` | RGPIO, `epp,xen-rgpio`: inputs and outputs; pin interrupts (rising, falling, both edges, low and high level, through the interrupt control registers ICR and the flags in ISFR) when the node has the interrupt Xen routes; no pull or open-drain flags (pad settings belong to the pin mux). The secure-only registers PCNS/PCNP must not be accessed from the DomU; reading them aborts |
 | `CONFIG_EPP_XEN_LPI2C` | LPI2C controller, `epp,xen-lpi2c`: 7-bit addresses, standard (100 kHz) and fast mode (400 kHz), polled. The SCL timing assumes the 24 MHz functional clock (`functional-clock-frequency`) |
 | `CONFIG_EPP_XEN_LPSPI` | LPSPI controller, `epp,xen-lpspi`: controller mode, 8-bit words, full duplex, SPI modes 0-3, MSB or LSB first, polled, chip select by GPIO (`cs-gpios`). SCK = 24 MHz / (2^prescale x (div + 2)), up to 12 MHz |
 
@@ -526,4 +538,6 @@ with no device connected there yet), `lpi2c6 lpspi7` with a W5500 module
 (version 0x04, MAC register write and read back correct), and
 `epp-passthrough` refusing `lpi2c7` together with `lpspi7`; preset
 `header-spi-w5500-eth` (pins set by U-Boot, W5500 with Zephyr's driver:
-DHCP and ping from the LAN on both netfront and W5500).
+DHCP and ping from the LAN on both netfront and W5500; with INTn on pin 36
+the driver uses the GPIO interrupt, ping 0.8 ms instead of about 7 ms when
+polling).
