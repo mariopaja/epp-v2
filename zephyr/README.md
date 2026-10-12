@@ -221,9 +221,10 @@ then no longer sees them (`status = "disabled"` in its device tree).
 |---|---|---|---|---|
 | `gpio2` | GPIO2 | `0x43810000` | RGB LED D19 (green GPIO_IO04, blue GPIO_IO12, red GPIO_IO13, active high), GPIO_IOxx pins of the 40-pin header | `epp,xen-rgpio` |
 | `lpi2c4` | LPI2C4 (Linux `i2c-3`) | `0x42540000` | display bus: IT6263 LVDS-to-HDMI bridge (0x4c, 0x33), PCA9632 backlight LED driver (0x62) | `epp,xen-lpi2c` |
+| `lpi2c6` | LPI2C6 (disabled in Linux) | `0x426c0000` | I2C of the 40-pin header J19: pin 3 SDA (GPIO_IO02), pin 5 SCL (GPIO_IO03) | `epp,xen-lpi2c` |
 
 ```bash
-EPP_XEN_ZEPHYR_PASSTHROUGH="gpio2 lpi2c4"
+EPP_XEN_ZEPHYR_PASSTHROUGH="gpio2 lpi2c6"
 ```
 
 Nothing is passed through automatically, and Xen hands over whole register
@@ -238,7 +239,8 @@ match:
 2. The pin mux: Linux no longer sets the pins of a device it does not own.
    The overlay `epp-zephyr-pt-pins.dtbo` sets them once at boot instead (SCMI
    pinctrl hog of Dom0). Only pins listed there work: for `gpio2` the three
-   LED pads, for `lpi2c4` GPIO_IO30 (SDA) and GPIO_IO31 (SCL). To use other
+   LED pads, for `lpi2c4` GPIO_IO30 (SDA) and GPIO_IO31 (SCL), for `lpi2c6`
+   GPIO_IO02 (SDA) and GPIO_IO03 (SCL). To use other
    GPIO2 pins of the 40-pin header, add their
    `IMX95_PAD_GPIO_IOxx__GPIO2_IO_BITxx` entries to
    `epp-zephyr-gpio2-pins.dtsi` and rebuild the image.
@@ -262,9 +264,12 @@ without DMA work: the SMMU is off for Xen, so a passed-through device that
 does DMA could write to any memory. The devices here are polled; their
 interrupts are not passed through.
 
-Clock and power stay with the System Manager: the GPIO2 and LPI2C4 clocks
-are on from boot (LPI2C4: 24 MHz, `/sys/kernel/debug/clk/clk_summary` in
-Dom0 before the passthrough), and Dom0 boots with `clk_ignore_unused`. The
+Clock and power stay with the System Manager: the GPIO2, LPI2C4 and LPI2C6
+clocks are on from boot (LPI2C: 24 MHz, hardware enable `Y` in
+`/sys/kernel/debug/clk/clk_summary` in Dom0, also for LPI2C6, which Linux
+never uses), and Dom0 boots with `clk_ignore_unused`. The System Manager
+configuration (`mx95evk.cfg`) gives these controllers and their pads to the
+A55 side (`LM2 "AP"`), not to the M7. The
 board's "PWM/GPIO select" (LED instead of PWM) is a gpio-hog in the FRDM
 device tree, set by Dom0.
 
@@ -277,15 +282,59 @@ drivers:
 | `CONFIG_EPP_XEN_RGPIO` | RGPIO, `epp,xen-rgpio`: inputs and outputs, no interrupts, no pull or open-drain flags (pad settings belong to the pin mux). The secure-only registers PCNS/PCNP must not be accessed from the DomU; reading them aborts |
 | `CONFIG_EPP_XEN_LPI2C` | LPI2C controller, `epp,xen-lpi2c`: 7-bit addresses, standard (100 kHz) and fast mode (400 kHz), polled. The SCL timing assumes the 24 MHz functional clock (`functional-clock-frequency`) |
 
-Samples (build like the netfront sample above, with the sample directory
-changed):
+### I2C on the 40-pin header (`lpi2c6`)
+
+The header's I2C pins (pins 3 and 5, as on a Raspberry Pi) can be LPI2C4 or
+LPI2C6 (schematic page 30, J19). LPI2C4 is already the display bus on
+GPIO_IO30/31, and the chip has one input select per signal, so `lpi2c6` uses
+LPI2C6, which nothing else on the board uses. The pins go directly to the
+SoC (not through the select switches of the SPI pins).
+
+| J19 pin | Signal |
+|---|---|
+| 1 | 3.3 V |
+| 3 | SDA (GPIO_IO02) |
+| 5 | SCL (GPIO_IO03) |
+| 6 | GND |
+
+- **No pull-ups on the board** (R660-R663 are not fitted). The connected
+  module needs its own (most breakout boards have them), or add about
+  2.2-4.7 kOhm from SDA and SCL to 3.3 V. The pads have the SoC's weak
+  internal pull-ups enabled, enough for an idle bus but not for reliable
+  transfers.
+- **3.3 V only.** Power modules with pull-ups from pin 1, never from 5 V: the
+  pull-ups would put 5 V on the SoC pins.
+- **Start-up timing:** Xen starts the Zephyr DomU together with Dom0, but the
+  header pins are switched to I2C by Dom0's pinctrl hog only when its Linux
+  boots, about 5 s later. Until then every transfer fails (`-EIO`), so
+  Zephyr code has to retry its first accesses instead of giving up.
+
+`xen_led_i2c_netfront` scans the header bus every 10 s. It also has an
+optional test with a PCF8574 I/O expander module (not on the board) at 0x20
+(A0-A2 to GND; a PCF8574A is at 0x38), driven with Zephyr's `nxp,pcf857x`
+GPIO driver: uncomment the `pcf8574` node and the `zephyr,user` node in its
+`app.overlay` and `CONFIG_GPIO_PCF857X_INIT_PRIORITY` in its `prj.conf`
+(the expander's driver must start after the bus driver). Its pins P0-P7 then
+go high one after the other, then all high, then all low, every 500 ms, each
+step read back:
+
+```
+app: header i2c (J19 pins 3/5): 0x20
+app: PCF8574 P0-P7 walk: 110 steps, 0 errors (ready after 5 s)
+```
+
+The PCF8574 drives its outputs high only weakly (about 0.1 mA): measure
+P0-P7 with a meter or logic analyser, or connect LEDs from VCC to the pins
+(active low).
+
+### Drivers and samples
 
 | Sample | Passthrough | Does |
 |---|---|---|
 | [xen_led_passthrough](samples/xen_led_passthrough) | `gpio2` | cycles D19 red, green, blue, white, off, one second each |
 | [xen_led_netfront](samples/xen_led_netfront) | `gpio2` | the same, plus netfront with DHCP |
 | [xen_i2c_passthrough](samples/xen_i2c_passthrough) | `lpi2c4` | every 10 s: scans the bus, reads the IT6263 chip IDs, writes and reads back a PCA9632 register |
-| [xen_led_i2c_netfront](samples/xen_led_i2c_netfront) | `gpio2 lpi2c4` | all together: D19 cycles every second, netfront with DHCP, every 10 s the network state and the I2C checks |
+| [xen_led_i2c_netfront](samples/xen_led_i2c_netfront) | `gpio2 lpi2c6` | all together: D19 cycles every second, netfront with DHCP, every 10 s the network state and a scan of the header I2C bus; optional PCF8574 GPIO test |
 
 ```bash
 west build -p -b xenvm/xenvm/gicv3 $HOME/dev/epp-v2/zephyr/samples/xen_i2c_passthrough -- \
@@ -305,9 +354,9 @@ xen_i2c: PCA9632 (0x62): MODE1 0x10 MODE2 0x01, PWM0 wrote 0x5a read 0x5a OK
 `xen_led_i2c_netfront` prints every 10 s:
 
 ```
-app: [4] LED cycling
-app: net: carrier on, mac 00:16:3e:63:b3:1e, ipv4 10.10.193.43
-app: i2c: 3 devices, IT6263 ID OK, PCA9632 write/read 0x5a OK
+app: [6] LED cycling
+app: net: carrier on, mac 00:16:3e:06:94:a5, ipv4 10.10.193.104
+app: header i2c (J19 pins 3/5): no devices
 ```
 
 The Zephyr DomU's output is also in Xen's console log, so it can be read
@@ -322,5 +371,6 @@ Zephyr application changes.
 Tested on hardware: `xen_led_passthrough` and `xen_led_netfront` (LED cycles,
 DHCP and ping from the LAN) with `gpio2`; `xen_i2c_passthrough` with
 `gpio2 lpi2c4` (all three devices found, IDs and register readback correct);
-`xen_led_i2c_netfront` with `gpio2 lpi2c4` (I2C checks pass, DHCP and ping
-from the LAN), each while Dom0 and the Linux DomU run.
+`xen_led_i2c_netfront` with a PCF8574 module on the header (found at 0x20,
+P0-P7 walk without errors, DHCP and ping from the LAN), each while Dom0 and
+the Linux DomU run.
