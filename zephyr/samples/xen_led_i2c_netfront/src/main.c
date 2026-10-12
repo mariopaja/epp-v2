@@ -25,6 +25,8 @@
  *                       ID 0x100 answered on 0x101 with the same data;
  *                       with CONFIG_EPP_FLEXCAN2_LOOPBACK in loopback mode
  *                       (own frames received, request 0x100 every 10 s)
+ *   CONFIG_EPP_LPUART7  lpuart7, 40-pin header UART: loopback test (jumper
+ *                       TX pin 24 to RX pin 21)
  *   CONFIG_EPP_PCF8574  PCF8574 module on pins 3/5: its pins P0-P7 go high
  *                       one after the other, then all high, then all low,
  *                       every step read back
@@ -42,6 +44,7 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/spi.h>
+#include <zephyr/drivers/uart.h>
 #include <zephyr/kernel.h>
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/net_ip.h>
@@ -605,6 +608,74 @@ static void can_report(void)
 }
 #endif /* CONFIG_EPP_FLEXCAN2 */
 
+/* ---- lpuart7: 40-pin header UART ---------------------------------------- */
+
+#ifdef CONFIG_EPP_LPUART7
+static const struct device *const header_uart = DEVICE_DT_GET(DT_NODELABEL(lpuart7));
+static atomic_t uart_on;
+
+static void uart_start(void)
+{
+	if (start_device(header_uart, "lpuart7")) {
+		atomic_set(&uart_on, 1);
+	}
+}
+
+/*
+ * Loopback: every byte sent on TX (pin 24) must come back on RX (pin 21)
+ * within a few character times (one byte at 115200 baud: 87 us).
+ */
+static void uart_report(uint32_t round)
+{
+	char line[32];
+	int len = snprintf(line, sizeof(line), "epp-v2 uart %u\r\n", round);
+	unsigned char c;
+	int ok = 0;
+
+	if (!atomic_get(&uart_on)) {
+		return;
+	}
+	while (uart_poll_in(header_uart, &c) == 0) {
+		/* drop old input */
+	}
+	(void)uart_err_check(header_uart);
+
+	for (int i = 0; i < len; i++) {
+		int64_t end = k_uptime_get() + 5;
+		int got = -1;
+
+		uart_poll_out(header_uart, line[i]);
+		while ((got = uart_poll_in(header_uart, &c)) != 0) {
+			if (k_uptime_get() > end) {
+				break;
+			}
+		}
+		if ((got != 0) || (c != (unsigned char)line[i])) {
+			break;
+		}
+		ok++;
+	}
+
+	if (ok == len) {
+		printk("app: header uart (pins 24/21): loopback OK (%d bytes, 115200 baud)\n", len);
+	} else {
+		printk("app: header uart (pins 24/21): no loopback after %d of %d bytes, errors 0x%x "
+		       "(jumper TX pin 24 - RX pin 21?)\n",
+		       ok, len, uart_err_check(header_uart));
+	}
+}
+#else
+static void uart_start(void)
+{
+	printk("app: lpuart7 is passed through, but CONFIG_EPP_LPUART7 is off\n");
+}
+
+static void uart_report(uint32_t round)
+{
+	ARG_UNUSED(round);
+}
+#endif /* CONFIG_EPP_LPUART7 */
+
 /* ---- passthrough list -------------------------------------------------- */
 
 /*
@@ -640,6 +711,9 @@ static void passthrough_thread(void *p1, void *p2, void *p3)
 	}
 	if (passed_through("flexcan2")) {
 		can_start_bus();
+	}
+	if (passed_through("lpuart7")) {
+		uart_start();
 	}
 	header_start();
 #ifdef CONFIG_EPP_PCF8574
@@ -728,6 +802,7 @@ int main(void)
 			header_report();
 			spi_report(round / 10U);
 			can_report();
+			uart_report(round / 10U);
 		}
 		k_msleep(1000);
 	}
