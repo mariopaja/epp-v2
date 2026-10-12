@@ -31,8 +31,13 @@ EPP_XEN_ZEPHYR_CPU_NODE = "${@('/cpus/cpu@%s00' % d.getVar('EPP_XEN_ZEPHYR_CPU')
 #   setenv epp_pt_lpi2c5_lpi2c6 'setenv epp_pt_paths "/soc/gpio@... /soc/... /soc/..."; setenv epp_pt_names gpio2,lpi2c5,lpi2c6'
 python do_epp_pt_map() {
     fixed = d.getVar('EPP_XEN_ZEPHYR_PT_FIXED').split()
+    combos = d.getVar('EPP_XEN_ZEPHYR_PT_COMBOS').split()
+    default = d.getVar('EPP_XEN_ZEPHYR_PT_DEFAULT')
+    if default not in combos:
+        bb.fatal('EPP_XEN_ZEPHYR_PASSTHROUGH: %s cannot be selected together (EPP_XEN_ZEPHYR_PT_CONFLICTS: %s)'
+                 % (default.replace('_', ' '), d.getVar('EPP_XEN_ZEPHYR_PT_CONFLICTS')))
     lines = []
-    for opt in d.getVar('EPP_XEN_ZEPHYR_PT_COMBOS').split():
+    for opt in combos:
         devs = fixed + ([] if opt == 'none' else opt.split('_'))
         nodes = []
         for n in devs:
@@ -47,7 +52,8 @@ python do_epp_pt_map() {
 }
 # Varflags read by name in a loop are not tracked by bitbake: depend on them
 EPP_PT_NODES_ALL = "${@' '.join('%s:%s' % (n, d.getVarFlag('EPP_XEN_ZEPHYR_PT_NODE', n)) for n in (d.getVar('EPP_XEN_ZEPHYR_PT_FIXED') + ' ' + d.getVar('EPP_XEN_ZEPHYR_PT_OPTIONS')).split())}"
-do_epp_pt_map[vardeps] += "EPP_XEN_ZEPHYR_PT_FIXED EPP_XEN_ZEPHYR_PT_COMBOS EPP_PT_NODES_ALL"
+do_epp_pt_map[vardeps] += "EPP_XEN_ZEPHYR_PT_FIXED EPP_XEN_ZEPHYR_PT_COMBOS EPP_PT_NODES_ALL \
+                           EPP_XEN_ZEPHYR_PT_DEFAULT EPP_XEN_ZEPHYR_PT_CONFLICTS"
 addtask epp_pt_map after do_configure before do_compile
 
 # Rebuild the script when the board settings change

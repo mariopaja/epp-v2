@@ -1,0 +1,20 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Pin mux fragment "lpspi7": 40-pin header J19 pin 26 (GPIO_IO07, SCK), pin
+ * 31 (GPIO_IO06, SOUT/MOSI), pin 29 (GPIO_IO05, SIN/MISO) as LPSPI7, pad
+ * settings as for the SPI pins in NXP's i.MX95 device trees; pin 35
+ * (GPIO_IO19, chip select) and pin 37 (GPIO_IO26, device reset) as GPIO2.
+ * GPIO_IO07 needs the System Manager configuration of epp-v2 (pad owned by
+ * the AP, not the M7). Part of epp-zephyr-pt-pins-<combination>.dtso
+ * (SCMI pinctrl hog, set once when Dom0 boots).
+ */
+
+pinctrl_epp_lpspi7: epplpspi7grp {
+	fsl,pins = <
+		IMX95_PAD_GPIO_IO07__LPSPI7_SCK		0x51e
+		IMX95_PAD_GPIO_IO06__LPSPI7_SOUT	0x51e
+		IMX95_PAD_GPIO_IO05__LPSPI7_SIN		0x51e
+		IMX95_PAD_GPIO_IO19__GPIO2_IO_BIT19	0x31e
+		IMX95_PAD_GPIO_IO26__GPIO2_IO_BIT26	0x31e
+	>;
+};
