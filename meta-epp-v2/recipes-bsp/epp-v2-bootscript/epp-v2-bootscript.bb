@@ -26,7 +26,7 @@ EPP_XEN_ZEPHYR_MEM_KB = "${@hex(int(d.getVar('EPP_XEN_ZEPHYR_MEM')) * 1024)}"
 # Dedicated core for the Zephyr DomU: CPU node of core N is /cpus/cpu@N00
 EPP_XEN_ZEPHYR_CPU_NODE = "${@('/cpus/cpu@%s00' % d.getVar('EPP_XEN_ZEPHYR_CPU')) if d.getVar('EPP_XEN_ZEPHYR_CPU') else ''}"
 # Host device tree nodes passed through to the Zephyr DomU
-EPP_XEN_ZEPHYR_PT_NODES = "gpio2:/soc/gpio@43810000 lpi2c4:/soc/bus@42000000/i2c@42540000"
+EPP_XEN_ZEPHYR_PT_NODES = "gpio2:/soc/gpio@43810000 lpi2c4:/soc/bus@42000000/i2c@42540000 lpi2c6:/soc/bus@42000000/i2c@426c0000"
 EPP_XEN_ZEPHYR_PT_PATHS = "${@' '.join(dict(e.split(':', 1) for e in d.getVar('EPP_XEN_ZEPHYR_PT_NODES').split())[n] for n in (d.getVar('EPP_XEN_ZEPHYR_PASSTHROUGH') or '').split())}"
 
 # Rebuild the script when the board settings change

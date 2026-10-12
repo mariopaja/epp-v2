@@ -114,7 +114,8 @@ if [ -n "${EPP_XEN_ZEPHYR_IMAGE}" ] && [ "${EPP_XEN}" = "dom0less" ]; then
         case "${pt}" in
             gpio2)  echo "Zephyr DomU passthrough: GPIO2 (RGB LED D19)" ;;
             lpi2c4) echo "Zephyr DomU passthrough: LPI2C4 (display I2C bus)" ;;
-            *) echo "Error: EPP_XEN_ZEPHYR_PASSTHROUGH: unknown device '${pt}' (gpio2, lpi2c4)" >&2; exit 1 ;;
+            lpi2c6) echo "Zephyr DomU passthrough: LPI2C6 (40-pin header, pins 3/5)" ;;
+            *) echo "Error: EPP_XEN_ZEPHYR_PASSTHROUGH: unknown device '${pt}' (gpio2, lpi2c4, lpi2c6)" >&2; exit 1 ;;
         esac
     done
     if [ -n "${EPP_XEN_ZEPHYR_PASSTHROUGH}" ]; then

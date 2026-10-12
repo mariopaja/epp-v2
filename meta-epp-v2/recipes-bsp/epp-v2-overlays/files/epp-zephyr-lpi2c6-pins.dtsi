@@ -1,0 +1,15 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Pin mux fragment "lpi2c6": 40-pin header J19 pin 3 (GPIO_IO02, SDA) and
+ * pin 5 (GPIO_IO03, SCL) as LPI2C6, same pad settings as the board's other
+ * I2C buses. The board has no pull-ups on these lines (R660-R663 not
+ * fitted): the connected module must have them. Part of
+ * epp-zephyr-pt-pins.dtso (SCMI pinctrl hog, set once when Dom0 boots).
+ */
+
+pinctrl_epp_lpi2c6: epplpi2c6grp {
+	fsl,pins = <
+		IMX95_PAD_GPIO_IO02__LPI2C6_SDA		0x40000b9e
+		IMX95_PAD_GPIO_IO03__LPI2C6_SCL		0x40000b9e
+	>;
+};

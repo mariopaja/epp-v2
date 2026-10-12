@@ -12,7 +12,7 @@ COMPATIBLE_MACHINE = "imx95-15x15-lpddr4x-frdm"
 # Hardware passed through to the Zephyr DomU: one fragment pair per device,
 # epp-zephyr-<name>-pt.dtsi (node for the partial device tree) and
 # epp-zephyr-<name>-pins.dtsi (pin group for the pinctrl hog)
-EPP_XEN_ZEPHYR_PT_DEVICES = "gpio2 lpi2c4"
+EPP_XEN_ZEPHYR_PT_DEVICES = "gpio2 lpi2c4 lpi2c6"
 
 SRC_URI = " \
     file://epp-example.dtso \
