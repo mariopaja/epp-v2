@@ -5,9 +5,9 @@
  * GPIO2 with the FRDM-IMX95 RGB LED D19 (green GPIO_IO04, blue GPIO_IO12,
  * red GPIO_IO13, active high), always; and any of LPI2C4 (display bus) and
  * the I2C buses of the 40-pin header J19, LPI2C5 (pins 27/28), LPI2C6
- * (pins 3/5) and LPI2C7 (pins 31/26), selected in Dom0 with
- * epp-passthrough. Accessing a device that is not passed through aborts, so
- * the I2C buses are not initialized at boot (zephyr,deferred-init): the
+ * (pins 3/5) and LPI2C7 (pins 31/26), and its SPI, LPSPI7, selected in Dom0
+ * with epp-passthrough. Accessing a device that is not passed through aborts, so
+ * the I2C and SPI buses are not initialized at boot (zephyr,deferred-init): the
  * application starts the ones Dom0 lists in xenstore (epp/passthrough).
  */
 
@@ -60,6 +60,22 @@
 		zephyr,deferred-init;
 		status = "okay";
 		/* Optional PCF8574 test module: pcf8574.overlay */
+	};
+
+	/*
+	 * SPI of the 40-pin header J19: SCK pin 26, MOSI pin 31, MISO pin 29;
+	 * chip select pin 35 (GPIO2 19, driven by the driver), device reset
+	 * pin 37 (GPIO2 26). Same pins as lpi2c7: never passed through
+	 * together. Optional W5500 test device: w5500.overlay
+	 */
+	lpspi7: spi@42710000 {
+		compatible = "epp,xen-lpspi";
+		reg = <0x00 0x42710000 0x00 0x10000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		cs-gpios = <&gpio2 19 GPIO_ACTIVE_LOW>;
+		zephyr,deferred-init;
+		status = "okay";
 	};
 
 	lpi2c7: i2c@426d0000 {		/* pin 31 SDA, pin 26 SCL */

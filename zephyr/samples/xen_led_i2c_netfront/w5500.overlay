@@ -1,0 +1,21 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Optional test device: a WIZnet W5500 Ethernet module on the header SPI
+ * (LPSPI7): SCLK pin 26, MOSI pin 31, MISO pin 29, SCSn pin 35, RSTn pin 37,
+ * 3.3 V pin 1, GND pin 6 (INTn not connected: the test polls). Register
+ * test only, no Ethernet driver. Add with
+ * -DEXTRA_DTC_OVERLAY_FILE=...;w5500.overlay
+ * -DEXTRA_CONF_FILE=...;w5500.conf (preset header-spi-w5500).
+ */
+
+#include <zephyr/dt-bindings/gpio/gpio.h>
+
+&lpspi7 {
+	w5500: w5500@0 {
+		compatible = "epp,w5500-test";
+		reg = <0>;
+		spi-max-frequency = <1000000>;
+		reset-gpios = <&gpio2 26 GPIO_ACTIVE_LOW>;
+	};
+};

@@ -38,6 +38,24 @@ config EPP_LPI2C7
 	  Every 10 s: scan the bus. On when the lpi2c7 node in app.overlay is
 	  "okay".
 
+config EPP_LPSPI7
+	bool "40-pin header SPI (LPSPI7, passthrough option lpspi7)"
+	default $(dt_nodelabel_enabled,lpspi7)
+	depends on $(dt_nodelabel_enabled,lpspi7)
+	select SPI
+	help
+	  Every 10 s: loopback test without chip select (connect MOSI pin 31
+	  to MISO pin 29 with a jumper). On when the lpspi7 node in
+	  app.overlay is "okay".
+
+config EPP_W5500
+	bool "W5500 register test on the header SPI"
+	depends on EPP_LPSPI7
+	help
+	  Every 10 s: read the version (0x04) and PHY state of a WIZnet W5500
+	  on LPSPI7 and write and read back its MAC address register. Set by
+	  w5500.conf, together with w5500.overlay (the w5500 node).
+
 config EPP_PCF8574
 	bool "PCF8574 I/O expander module on the header I2C"
 	depends on EPP_LPI2C6

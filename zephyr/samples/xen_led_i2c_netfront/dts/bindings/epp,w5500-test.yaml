@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  WIZnet W5500 for the register test of this application (no Ethernet
+  driver): the application reads its version and PHY state and writes and
+  reads back its MAC address register over SPI.
+
+compatible: "epp,w5500-test"
+
+include: spi-device.yaml
+
+properties:
+  reset-gpios:
+    type: phandle-array
+    description: Reset pin (RSTn), active low.
