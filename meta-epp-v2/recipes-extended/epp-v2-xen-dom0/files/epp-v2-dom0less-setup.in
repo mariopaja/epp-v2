@@ -34,6 +34,17 @@ for role in $(echo "$domus" | tr ',' ' '); do
             xl network-attach "$name" bridge=xenbr0 type=vif || rc=1
             ;;
         zephyr)
+            # Hardware Xen passed through to it (boot.scr:
+            # epp.passthrough=gpio2,lpi2c6): the Zephyr application reads
+            # epp/passthrough and uses only these devices
+            pt=$(sed -n 's/.*epp\.passthrough=\([^ ]*\).*/\1/p' /proc/cmdline)
+            echo "epp-v2: $name: passthrough ${pt:-none}"
+            if xenstore-write "/local/domain/$id/epp/passthrough" "$pt"; then
+                xenstore-chmod "/local/domain/$id/epp" n0 "r$id" || rc=1
+                xenstore-chmod "/local/domain/$id/epp/passthrough" n0 "r$id" || rc=1
+            else
+                rc=1
+            fi
             xl network-attach "$name" bridge=xenbr0 type=vif || rc=1
             ;;
     esac

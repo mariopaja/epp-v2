@@ -1,0 +1,110 @@
+#!/bin/sh
+# Select the hardware Xen passes through to the Zephyr DomU at the next
+# boot: the fixed devices (GPIO2) always, plus at most one option. Writes
+# epp-passthrough.txt to the boot partition, which boot.scr reads.
+#
+#   epp-passthrough             menu
+#   epp-passthrough <option>    select an option (none, lpi2c4, ...)
+#   epp-passthrough -l          show the options and the selection
+
+LIST=/usr/share/epp-v2/zephyr-passthrough.list
+FILE=epp-passthrough.txt
+
+die() { echo "epp-passthrough: $*" >&2; exit 1; }
+[ -r "$LIST" ] || die "$LIST missing"
+
+names() { grep "^$1:" "$LIST" | cut -d: -f2 | tr '\n' ' '; }
+options="none $(names option)"
+fixed=$(names fixed)
+default=$(grep '^default:' "$LIST" | cut -d: -f2)
+desc() {
+    [ "$1" = none ] && { echo "nothing else"; return; }
+    grep -E "^(fixed|option):$1:" "$LIST" | cut -d: -f3-
+}
+valid() { for o in $options; do [ "$o" = "$1" ] && return 0; done; return 1; }
+
+# Boot partition: partition 1 of the disk Dom0 runs from
+root=$(sed -n 's/.*root=\([^ ]*\).*/\1/p' /proc/cmdline)
+bootdev=${root%[0-9]*}1
+[ -b "$bootdev" ] || die "boot partition $bootdev not found"
+
+with_boot() {   # with_boot <command...>: run with the boot partition on $mnt
+    mnt=$(mktemp -d) || die "mktemp failed"
+    mount "$bootdev" "$mnt" || { rmdir "$mnt"; die "cannot mount $bootdev"; }
+    "$@"
+    ret=$?
+    umount "$mnt"
+    rmdir "$mnt"
+    return $ret
+}
+
+read_selected() {
+    selected=$(sed -n 's/^epp_zephyr_pt=\(.*\)/\1/p' "$mnt/$FILE" 2>/dev/null)
+    [ -n "$selected" ] || selected=$default
+}
+write_selected() {
+    printf 'epp_zephyr_pt=%s\n' "$1" > "$mnt/$FILE" && sync
+}
+
+active=$(sed -n 's/.*epp\.passthrough=\([^ ]*\).*/\1/p' /proc/cmdline)
+
+show() {
+    echo "Xen passthrough to the Zephyr DomU"
+    echo
+    for f in $fixed; do printf '     always   %-8s %s\n' "$f" "$(desc "$f")"; done
+    echo
+    i=0
+    for o in $options; do
+        mark=" "
+        [ "$o" = "$1" ] && mark="*"
+        printf '  %d  (%s)  %-8s %s\n' "$i" "$mark" "$o" "$(desc "$o")"
+        i=$((i + 1))
+    done
+    echo
+    echo "  running now: ${active:-unknown}"
+}
+
+case "$1" in
+    -h|--help)
+        sed -n '2,10s/^# \{0,1\}//p' "$0"
+        exit 0 ;;
+    -l)
+        with_boot read_selected
+        show "$selected"
+        echo "  next boot:   $selected"
+        exit 0 ;;
+    "") ;;
+    *)
+        valid "$1" || die "unknown option '$1' (${options% })"
+        with_boot write_selected "$1" || die "cannot write $FILE"
+        echo "Selected $1 for the next boot (reboot to apply)."
+        exit 0 ;;
+esac
+
+# Menu
+with_boot read_selected
+choice=$selected
+while true; do
+    echo
+    show "$choice"
+    echo
+    printf 'Select 0-%d, s to save, q to quit: ' $(($(echo $options | wc -w) - 1))
+    read -r key || exit 1
+    case "$key" in
+        q) echo "Not changed."; exit 0 ;;
+        s)
+            with_boot write_selected "$choice" || die "cannot write $FILE"
+            echo "Saved: $choice at the next boot."
+            printf 'Reboot now? [y/N] '
+            read -r yn
+            [ "$yn" = y ] && reboot
+            exit 0 ;;
+        *[!0-9]*|"") ;;
+        *)
+            i=0
+            for o in $options; do
+                [ "$i" = "$key" ] && choice=$o
+                i=$((i + 1))
+            done ;;
+    esac
+done

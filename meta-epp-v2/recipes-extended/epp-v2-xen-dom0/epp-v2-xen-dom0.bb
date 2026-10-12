@@ -16,6 +16,7 @@ SRC_URI = " \
     file://xendomains-epp-v2.conf \
     file://epp-v2-dom0less.service.in \
     file://epp-v2-dom0less-setup.in \
+    file://epp-passthrough \
 "
 
 S = "${UNPACKDIR}"
@@ -31,8 +32,12 @@ SYSTEMD_AUTO_ENABLE:${PN} = "${@'enable' if d.getVar('EPP_XEN') == 'dom0less' el
 # Name of the Linux DomU in xl (xl list, xl console <name>)
 EPP_LINUX_NAME = "${EPP_HOSTNAME}"
 
+# Passthrough devices for epp-passthrough (layer.conf), one per line:
+# fixed:<name>:<description>, option:<name>:<description>, default:<option>
+EPP_PT_LIST = "${@'|'.join(['fixed:%s:%s' % (n, d.getVarFlag('EPP_XEN_ZEPHYR_PT_DESC', n) or '') for n in d.getVar('EPP_XEN_ZEPHYR_PT_FIXED').split()] + ['option:%s:%s' % (n, d.getVarFlag('EPP_XEN_ZEPHYR_PT_DESC', n) or '') for n in d.getVar('EPP_XEN_ZEPHYR_PT_OPTIONS').split()] + ['default:%s' % (d.getVar('EPP_XEN_ZEPHYR_PASSTHROUGH') or 'none')])}"
+
 do_install[vardeps] += "EPP_XEN EPP_XEN_LINUX_MEM EPP_XEN_LINUX_VCPUS EPP_XEN_UPLINK EPP_DOMU_DISK \
-                        EPP_LINUX_NAME"
+                        EPP_LINUX_NAME EPP_PT_LIST"
 
 do_install() {
     epp_subst() {
@@ -57,6 +62,11 @@ do_install() {
     chmod 0755 ${D}${libexecdir}/epp-v2-dom0less-setup
 
     # DomU config, also usable by hand: xl create /etc/xen/epp-v2.cfg
+    # Passthrough selection for the Zephyr DomU (read by boot.scr)
+    install -d ${D}${bindir} ${D}${datadir}/epp-v2
+    install -m 0755 ${S}/epp-passthrough ${D}${bindir}/
+    echo "${EPP_PT_LIST}" | tr '|' '\n' > ${D}${datadir}/epp-v2/zephyr-passthrough.list
+
     install -d ${D}${sysconfdir}/xen/auto
     epp_subst ${S}/epp-v2-domu.cfg.in > ${D}${sysconfdir}/xen/epp-v2.cfg
     chmod 0644 ${D}${sysconfdir}/xen/epp-v2.cfg
@@ -70,5 +80,5 @@ do_install() {
     chmod 0644 ${D}${systemd_system_unitdir}/epp-v2-dom0less.service
 }
 
-FILES:${PN} += "${systemd_system_unitdir}"
-RDEPENDS:${PN} = "xen-tools-xl xen-tools-xendomains"
+FILES:${PN} += "${systemd_system_unitdir} ${datadir}/epp-v2"
+RDEPENDS:${PN} = "xen-tools-xl xen-tools-xendomains xen-tools-xenstore"
