@@ -35,6 +35,9 @@ static evtchn_port_t xs_port;
 static uint32_t xs_req_id;
 static K_SEM_DEFINE(xs_event, 0, 1);
 static K_MUTEX_DEFINE(xs_lock);
+/* epp_xs_init() may be called by several users (netfront, applications) */
+static K_MUTEX_DEFINE(xs_init_lock);
+static bool xs_ready;
 static char xs_payload[XENSTORE_PAYLOAD_MAX + 1];
 
 static void xs_event_cb(void *priv)
@@ -148,7 +151,7 @@ static int xs_talk(enum xsd_sockmsg_type type, const char *path, const char *val
 	struct xsd_sockmsg rsp;
 	int ret;
 
-	if (intf == NULL) {
+	if (!xs_ready) {
 		return -ENODEV;
 	}
 
@@ -193,16 +196,16 @@ static int xs_talk(enum xsd_sockmsg_type type, const char *path, const char *val
 	}
 }
 
-int epp_xs_init(k_timeout_t timeout)
+static int xs_connect(k_timepoint_t end)
 {
-	k_timepoint_t end = sys_timepoint_calc(timeout);
 	uint64_t evtchn = 0U;
 	uint64_t pfn = 0U;
 	mm_reg_t va;
 	int ret;
 
+	/* Mapped and bound by an earlier call that then timed out */
 	if (intf != NULL) {
-		return 0;
+		goto wait_connected;
 	}
 
 	ret = hvm_get_parameter(HVM_PARAM_STORE_EVTCHN, DOMID_SELF, &evtchn);
@@ -232,10 +235,10 @@ int epp_xs_init(k_timeout_t timeout)
 	bind_event_channel(xs_port, xs_event_cb, NULL);
 	unmask_event_channel(xs_port);
 
+wait_connected:
 	while (intf->connection != XENSTORE_CONNECTED) {
 		if (sys_timepoint_expired(end)) {
 			LOG_ERR("xenstore connection not established");
-			intf = NULL;
 			return -ETIMEDOUT;
 		}
 		k_msleep(50);
@@ -243,6 +246,21 @@ int epp_xs_init(k_timeout_t timeout)
 
 	LOG_INF("xenstore connected (pfn 0x%llx, evtchn %u)", pfn, xs_port);
 	return 0;
+}
+
+int epp_xs_init(k_timeout_t timeout)
+{
+	k_timepoint_t end = sys_timepoint_calc(timeout);
+	int ret = 0;
+
+	k_mutex_lock(&xs_init_lock, K_FOREVER);
+	if (!xs_ready) {
+		ret = xs_connect(end);
+		xs_ready = (ret == 0);
+	}
+	k_mutex_unlock(&xs_init_lock);
+
+	return ret;
 }
 
 int epp_xs_read(const char *path, char *buf, size_t len)
