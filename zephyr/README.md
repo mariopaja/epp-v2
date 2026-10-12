@@ -227,6 +227,7 @@ the options, selected on the board:
 | `lpi2c7` (option) | LPI2C7 (disabled in Linux) | `0x426d0000` | I2C of the 40-pin header J19: pin 31 SDA (GPIO_IO06), pin 26 SCL (GPIO_IO07) | `epp,xen-lpi2c` |
 | `lpspi7` (option) | LPSPI7 (disabled in Linux) | `0x42710000` | SPI of the 40-pin header J19: SCK pin 26, MOSI pin 31, MISO pin 29, chip select pin 35 (GPIO2 19), reset pin 37 (GPIO2 26) | `epp,xen-lpspi` |
 | `flexcan2` (option) | FlexCAN2 (Linux `can0` without passthrough) | `0x425b0000`, interrupt GIC SPI 38 | CAN2, transceiver TJA1051, connector J20 (pin 1 CANH, 2 CANL, 3 GND); Linux keeps CAN5 (J21) | `epp,xen-flexcan` |
+| `lpuart7` (option) | LPUART7 (disabled in Linux) | `0x42690000` | UART of the 40-pin header J19: pin 24 TX (GPIO_IO08), pin 21 RX (GPIO_IO09); Dom0 then switches U16 to the header and leaves LPSPI3 (M.2 slot SPI) off | `epp,xen-lpuart` |
 
 Any combination works, except `lpi2c7` with `lpspi7`: both use pins 31/26
 (`EPP_XEN_ZEPHYR_PT_CONFLICTS` in layer.conf). `epp-passthrough` refuses to
@@ -273,7 +274,7 @@ Nothing is passed through automatically, and Xen hands over whole register
 blocks, not single pins or bus addresses: the DomU gets all 32 pins of
 GPIO2, or the whole I2C bus with every device on it. The build prepares
 every combination of the options that does not contain a conflicting pair
-(48 for the six options); `boot.scr` picks the selected one:
+(96 for the seven options); `boot.scr` picks the selected one:
 
 1. **Xen:** `boot.scr` marks the host nodes `xen,passthrough`, so Xen takes
    them from Dom0, and loads the partial device tree
@@ -392,7 +393,8 @@ chip select is a GPIO2 pin driven by the driver (`cs-gpios`). Other SPI
 pins of the header: LPSPI6 (pins 5/3/28/27) uses the pins of `lpi2c6` and
 `lpi2c5`; LPSPI3 (pins 23/19/21/24) goes through the board's analog switch
 U16 (schematic page 18), which connects the pins to the M.2 Wi-Fi slot
-unless "SPI3/GPIO select" of the GPIO expander is high.
+unless "SPI3/GPIO select" of the GPIO expander is high, and Linux in Dom0
+uses LPSPI3 and these pads for the M.2 slot (see `lpuart7`).
 
 `xen_led_i2c_netfront` tests the bus every 10 s: without a device in a
 loopback test (jumper from MOSI pin 31 to MISO pin 29, no chip select);
@@ -487,6 +489,40 @@ the application also sends a request to itself:
 app: can (J20, loopback): error-active (tx err 0, rx err 0), sent 23, received 23, last 0x100 [2] ca fe
 ```
 
+### UART on the 40-pin header (`lpuart7`)
+
+| J19 pin | Signal |
+|---|---|
+| 24 | TX (GPIO_IO08) |
+| 21 | RX (GPIO_IO09) |
+
+The pins go through the board's analog switch U16 (schematic page 18): with
+"SPI3/GPIO select" (GPIO expander line 2) low they connect to the M.2
+slot's SPI, high to the header. Two settings of the FRDM device tree in
+Dom0 work against that, and `epp-zephyr-lpuart7-dom0.dtsi` changes both
+while `lpuart7` is passed through:
+
+- the gpio-hog of "SPI3/GPIO select" drives it low (`output-low`). An
+  overlay cannot delete that property, so the hog becomes
+  `GPIO_ACTIVE_LOW`: the same output-low now drives the line high.
+- LPSPI3 (`spidev` for the M.2 slot) is enabled, and its pin group claims
+  GPIO_IO08-11 (GPIO_IO08 as its chip select). Linux applies it after the
+  pinctrl hog and takes the UART pads back, so LPSPI3 is disabled in Dom0.
+
+The M.2 slot's SPI is unusable meanwhile (the Wi-Fi/BT module uses SDIO and
+LPUART5).
+
+`xen_led_i2c_netfront` tests the UART every 10 s in a loopback (wire from
+pin 24 to pin 21, which are diagonal, not neighbours): it sends a line at
+115200 baud byte by byte and expects every byte back:
+
+```
+app: header uart (pins 24/21): loopback OK (15 bytes, 115200 baud)
+```
+
+The binding's `internal-loopback` property loops TX to RX inside the LPUART
+instead (CTRL[LOOPS]), to test the driver without the pin path.
+
 ### Drivers and samples
 
 The upstream NXP drivers need SCMI (clocks), pinctrl and the MCUX SoC
@@ -497,6 +533,7 @@ drivers:
 |---|---|
 | `CONFIG_EPP_XEN_RGPIO` | RGPIO, `epp,xen-rgpio`: inputs and outputs; pin interrupts (rising, falling, both edges, low and high level, through the interrupt control registers ICR and the flags in ISFR) when the node has the interrupt Xen routes; no pull or open-drain flags (pad settings belong to the pin mux). The secure-only registers PCNS/PCNP must not be accessed from the DomU; reading them aborts |
 | `CONFIG_EPP_XEN_LPI2C` | LPI2C controller, `epp,xen-lpi2c`: 7-bit addresses, standard (100 kHz) and fast mode (400 kHz), polled. The SCL timing assumes the 24 MHz functional clock (`functional-clock-frequency`) |
+| `CONFIG_EPP_XEN_LPUART` | LPUART, `epp,xen-lpuart`: polled (`poll_in`, `poll_out`, `err_check`), 8N1, baud rate from `current-speed` (oversampling and divider with the smallest error from the 24 MHz clock), optional `internal-loopback` |
 | `CONFIG_EPP_XEN_FLEXCAN` | FlexCAN, `epp,xen-flexcan`: classic CAN (no CAN FD), standard and extended IDs, remote frames, 8 receive filters (one mailbox each, individual masks), one transmit mailbox, normal, loopback and listen-only mode, state changes; interrupt driven. Start-up and i.MX95 quirks as in Linux's flexcan driver (ECC RAM init, MECR, reserved mailbox 0). Bit timing from the 24 MHz CAN clock (`functional-clock-frequency`) |
 | `CONFIG_EPP_XEN_LPSPI` | LPSPI controller, `epp,xen-lpspi`: controller mode, 8-bit words, full duplex, SPI modes 0-3, MSB or LSB first, polled, chip select by GPIO (`cs-gpios`). SCK = 24 MHz / (2^prescale x (div + 2)), up to 12 MHz |
 
@@ -520,6 +557,7 @@ Kconfig (its `Kconfig` and `prj.conf`), each in its own `#ifdef` block:
 | `CONFIG_EPP_W5500` | W5500 register test on the header SPI instead of the loopback test (`w5500.overlay` + `w5500.conf`) | off |
 | `CONFIG_EPP_FLEXCAN2` | CAN2: heartbeat 0x123 every second, frames with ID 0x100 answered on 0x101 with the same data, state every 10 s | on (follows the `flexcan2` node) |
 | `CONFIG_EPP_FLEXCAN2_LOOPBACK` | CAN2 in loopback mode, no wiring (`can-loopback.conf`) | off |
+| `CONFIG_EPP_LPUART7` | header UART: loopback test every 10 s | on (follows the `lpuart7` node) |
 | `CONFIG_EPP_W5500_ETH` | W5500 as second network interface with Zephyr's driver, DHCP (`w5500-eth.overlay` + `w5500-eth.conf`; LPSPI7 starts at boot) | off |
 | `CONFIG_EPP_PCF8574` | PCF8574 module on pins 3/5 (below) | off |
 
@@ -599,4 +637,5 @@ the driver uses the GPIO interrupt, ping 0.8 ms instead of about 7 ms when
 polling); `flexcan2` in loopback mode and with J20 wired to J21 (heartbeat
 in `candump` on Dom0's `can0`, `cansend` answered in 0.17 ms, both nodes
 error-active; with `can0` down the Zephyr DomU keeps running and recovers
-when it comes up).
+when it comes up); `lpuart7` with a wire from pin 24 to pin 21 (loopback
+OK at 115200 baud; it failed until LPSPI3 was disabled in Dom0).
