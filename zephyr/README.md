@@ -226,7 +226,7 @@ the options, selected on the board:
 | `lpi2c6` (option) | LPI2C6 (disabled in Linux) | `0x426c0000` | I2C of the 40-pin header J19: pin 3 SDA (GPIO_IO02), pin 5 SCL (GPIO_IO03) | `epp,xen-lpi2c` |
 | `lpi2c7` (option) | LPI2C7 (disabled in Linux) | `0x426d0000` | I2C of the 40-pin header J19: pin 31 SDA (GPIO_IO06), pin 26 SCL (GPIO_IO07) | `epp,xen-lpi2c` |
 | `lpspi7` (option) | LPSPI7 (disabled in Linux) | `0x42710000` | SPI of the 40-pin header J19: SCK pin 26, MOSI pin 31, MISO pin 29, chip select pin 35 (GPIO2 19), reset pin 37 (GPIO2 26) | `epp,xen-lpspi` |
-| `flexcan2` (option) | FlexCAN2 (Linux `can0` without passthrough) | `0x425b0000`, interrupt GIC SPI 38 | CAN2, transceiver TJA1051, connector J20 (pin 1 CANH, 2 CANL, 3 GND); Linux keeps CAN5 (J21) | `epp,xen-flexcan` |
+| `flexcan2` (option) | FlexCAN2 (disabled in Linux, also without passthrough) | `0x425b0000`, interrupt GIC SPI 38 | CAN2, transceiver TJA1051, connector J20 (pin 1 CANH, 2 CANL, 3 GND); Linux keeps CAN5 (J21) | `epp,xen-flexcan` |
 | `lpuart7` (option) | LPUART7 (disabled in Linux) | `0x42690000` | UART of the 40-pin header J19: pin 24 TX (GPIO_IO08), pin 21 RX (GPIO_IO09); Dom0 then switches U16 to the header and leaves LPSPI3 (M.2 slot SPI) off | `epp,xen-lpuart` |
 
 Any combination works, except `lpi2c7` with `lpspi7`: both use pins 31/26
@@ -309,6 +309,7 @@ fragment pair each in `meta-epp-v2/recipes-bsp/epp-v2-overlays/files/`:
 | `epp-zephyr-<name>-pt.dtsi` | node of the partial device tree: `xen,path`, `xen,reg`, `xen,force-assign-without-iommu` |
 | `epp-zephyr-<name>-pins.dtsi` | pin group `pinctrl_epp_<name>` for the hog |
 | `epp-zephyr-<name>-dom0.dtsi` | optional: other changes to Dom0's device tree while the device is passed through (top level of the pin mux overlay); `flexcan2` keeps the CAN transceivers on |
+| `epp-zephyr-dom0.dtsi` | changes to Dom0's device tree in every combination: FlexCAN2 off (reserved for the Zephyr DomU) |
 
 From these the build generates the files per combination (`epp-v2-overlays`,
 combinations: `EPP_XEN_ZEPHYR_PT_COMBOS`), the combination table in
@@ -472,6 +473,13 @@ app: can (J20): error-active (tx err 0, rx err 0), sent 21, received 1, last 0x1
   `regulator-always-on` while `flexcan2` is passed through. Without it the
   Zephyr DomU's frames do not reach the bus (bit errors, bus-off) while
   Linux's `can0` is down.
+- **J20 reserved for the Zephyr DomU:** FlexCAN2 is disabled in Dom0 in
+  every combination (`epp-zephyr-dom0.dtsi`), also when `flexcan2` is not
+  passed through. When Linux owned it, its runtime power management turned
+  the CAN2 clock off through the System Manager; that survives a warm
+  reboot, and FlexCAN2 then stayed in low-power mode in the next boot that
+  passed it through (driver: "no response (MCR ...)") until a power cycle.
+  After updating from an image without this fragment, power cycle once.
 - **CAN2/CAN5 switch:** the pins reach the transceivers through U19
   (schematic page 18) while "CAN2&5/GPIO select" is low, a gpio-hog of the
   FRDM device tree that Dom0 sets independently of FlexCAN2.
@@ -667,5 +675,6 @@ the driver uses the GPIO interrupt, ping 0.8 ms instead of about 7 ms when
 polling); `flexcan2` in loopback mode and with J20 wired to J21 (heartbeat
 in `candump` on Dom0's `can0`, `cansend` answered in 0.17 ms, both nodes
 error-active; with `can0` down the Zephyr DomU keeps running and recovers
-when it comes up); `lpuart7` with a wire from pin 24 to pin 21 (loopback
+when it comes up; warm reboots between combinations with and without
+`flexcan2` keep it working, since Linux no longer owns FlexCAN2); `lpuart7` with a wire from pin 24 to pin 21 (loopback
 OK at 115200 baud; it failed until LPSPI3 was disabled in Dom0).

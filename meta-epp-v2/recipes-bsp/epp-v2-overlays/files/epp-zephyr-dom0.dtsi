@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Dom0 fragment for every passthrough combination (with a Zephyr DomU), at
+ * the top level of epp-zephyr-pt-pins-<combination>.dtso.
+ *
+ * FlexCAN2 (CAN2, connector J20) is reserved for the Zephyr DomU (option
+ * flexcan2), also while it is not passed through: when Linux owns FlexCAN2,
+ * its runtime power management switches the CAN2 clock off through the
+ * System Manager, and that survives a warm reboot. FlexCAN2 then does not
+ * leave low-power mode in the next boot that passes it through, until the
+ * board is power cycled. Linux keeps CAN5 (J21).
+ */
+
+&flexcan2 {
+	status = "disabled";
+};

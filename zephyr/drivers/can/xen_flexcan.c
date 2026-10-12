@@ -542,7 +542,10 @@ static int xen_flexcan_init(const struct device *dev)
 		ret = freeze(dev);
 	}
 	if (ret != 0) {
-		LOG_ERR("no response (MCR 0x%08x)", rd(dev, FC_MCR));
+		/* Stuck in low-power mode (MCR[LPMACK]): no protocol engine clock */
+		LOG_ERR("no response (MCR 0x%08x): CAN clock off? (after Linux owned FlexCAN, "
+			"power cycle the board)",
+			rd(dev, FC_MCR));
 		return ret;
 	}
 

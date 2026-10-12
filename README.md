@@ -119,7 +119,8 @@ SKIP_SYNC=1 ./docker-run.sh --xen  # rebuild without repo sync
   the 40-pin header, `lpi2c5` (pins 27/28), `lpi2c6` (pins 3/5) and `lpi2c7`
   (pins 31/26), its SPI `lpspi7` (pins 26/31/29, chip select 35; not
   together with `lpi2c7`), its UART `lpuart7` (pin 24 TX, pin 21 RX), and
-  CAN2 `flexcan2` (connector J20; Linux keeps CAN5 on J21). Tick them in Dom0 with `epp-passthrough` (menu) and reboot;
+  CAN2 `flexcan2` (connector J20, reserved for the Zephyr DomU: off in Linux
+  also without passthrough; Linux keeps CAN5 on J21). Tick them in Dom0 with `epp-passthrough` (menu) and reboot;
   `EPP_XEN_ZEPHYR_PASSTHROUGH` is only the default. Dom0 sees passed-through devices as `disabled`. See
   [zephyr/README.md](zephyr/README.md).
 - Domain names: `boot.scr` passes the dom0less DomUs to Dom0 in Xen's
@@ -281,7 +282,7 @@ sudo bmaptool copy images/epp-v2-sdcard.wic.zst /dev/sdX
 | `EPP_EXTRA_PACKAGES` | empty | Extra packages installed in the image |
 | `EPP_XEN_ZEPHYR_IMAGE` | empty | Zephyr image (raw `zephyr.bin` for `xenvm/xenvm/gicv3`, path inside this repo, e.g. `xen/zephyr.bin`) started as second DomU with `--xen=dom0less`. `EPP_XEN_ZEPHYR_VCPUS` / `EPP_XEN_ZEPHYR_MEM` (MB) set its resources |
 | `EPP_XEN_ZEPHYR_CPU` | `5` | Physical A55 core (1-5) reserved for the Zephyr DomU: own Xen cpupool with the `null` scheduler, so its vCPU always runs on that core and no other domain does. Empty: shared cores (credit2). Core 0 is Xen's boot CPU |
-| `EPP_XEN_ZEPHYR_PASSTHROUGH` | empty | Default passthrough to the Zephyr DomU next to GPIO2 (always), space separated: `lpi2c4` (display I2C bus, Linux loses HDMI), `lpi2c5`, `lpi2c6`, `lpi2c7` (I2C of the 40-pin header, pins 27/28, 3/5, 31/26; no pull-ups on the board), `lpspi7` (SPI of the 40-pin header, not with `lpi2c7`), `flexcan2` (CAN2, connector J20), `lpuart7` (UART of the 40-pin header, pins 24/21; the M.2 slot's SPI is off meanwhile); empty: GPIO2 only. Switch on the board with `epp-passthrough` in Dom0 |
+| `EPP_XEN_ZEPHYR_PASSTHROUGH` | empty | Default passthrough to the Zephyr DomU next to GPIO2 (always), space separated: `lpi2c4` (display I2C bus, Linux loses HDMI), `lpi2c5`, `lpi2c6`, `lpi2c7` (I2C of the 40-pin header, pins 27/28, 3/5, 31/26; no pull-ups on the board), `lpspi7` (SPI of the 40-pin header, not with `lpi2c7`), `flexcan2` (CAN2, connector J20; off in Linux in every combination), `lpuart7` (UART of the 40-pin header, pins 24/21; the M.2 slot's SPI is off meanwhile); empty: GPIO2 only. Switch on the board with `epp-passthrough` in Dom0 |
 | `EPP_XEN_ZEPHYR_EARLY_PINS` | empty | Header pins U-Boot switches at boot for these passthrough devices (`lpi2c5`, `lpi2c6`, `lpi2c7`, `lpspi7`), for Zephyr drivers that access their device at boot (W5500 Ethernet driver: `lpspi7`). Changes U-Boot: flash the whole card. See [zephyr/README.md](zephyr/README.md) |
 | `EPP_M7_IMAGE` | empty | Cortex-M7 firmware (raw `.bin`, path inside this repo, e.g. `m7/zephyr.bin`) packed into the boot container and started by the System Manager at power-on. Empty: NXP's M7 demo. `none`: no M7 image, M7 off. Update only the M7 on a flashed card: `./flash-sd.sh --m7 <file\|none>`. See [zephyr/README.md](zephyr/README.md) |
 
