@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Parts of the application. The I2C bus Xen passes through is selected in
+# Dom0 (epp-passthrough); a part only runs when its bus is passed through.
+
+mainmenu "epp-v2 Zephyr DomU: LED, network and I2C passthrough"
+
+config EPP_LPI2C4
+	bool "Display bus (LPI2C4, passthrough option lpi2c4)"
+	default $(dt_nodelabel_enabled,lpi2c4)
+	depends on $(dt_nodelabel_enabled,lpi2c4)
+	help
+	  Every 10 s: scan the display bus, read the IT6263 chip ID, write and
+	  read back a PCA9632 register. On when the lpi2c4 node in app.overlay
+	  is "okay" (disabled by default: the bus belongs to HDMI in Linux).
+
+config EPP_LPI2C6
+	bool "40-pin header I2C (LPI2C6, passthrough option lpi2c6)"
+	default $(dt_nodelabel_enabled,lpi2c6)
+	depends on $(dt_nodelabel_enabled,lpi2c6)
+	help
+	  Every 10 s: scan the I2C bus of the 40-pin header (pins 3/5). On
+	  when the lpi2c6 node in app.overlay is "okay".
+
+config EPP_PCF8574
+	bool "PCF8574 I/O expander module on the header I2C"
+	depends on EPP_LPI2C6
+	help
+	  Drive the pins P0-P7 of a PCF8574 module at 0x20 (not on the board)
+	  as GPIOs: one pin high after the other, then all high, then all
+	  low, every step read back. Needs the pcf8574 and zephyr,user nodes
+	  in app.overlay (commented out there).
+
+source "Kconfig.zephyr"
