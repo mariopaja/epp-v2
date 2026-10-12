@@ -3,15 +3,15 @@
  *
  * WIZnet W5500 Ethernet module on the header SPI (LPSPI7) as a second
  * network interface of the Zephyr DomU, with Zephyr's W5500 Ethernet driver.
- * Wiring as in w5500.overlay, plus INTn on pin 36 (GPIO_IO16, GPIO2 16): the
+ * Wiring as in extras/w5500.overlay, plus INTn on pin 36 (GPIO_IO16, GPIO2 16): the
  * driver waits for its interrupt instead of polling.
  *
  * Zephyr's network stack and this driver access the chip at boot, so here
  * LPSPI7 starts at boot as well (not deferred): the image needs lpspi7
  * passed through (epp-passthrough) and its pins set by U-Boot
  * (EPP_XEN_ZEPHYR_EARLY_PINS="lpspi7"), or the first access aborts.
- * Add with -DEXTRA_DTC_OVERLAY_FILE=...;w5500-eth.overlay
- * -DEXTRA_CONF_FILE=...;w5500-eth.conf (preset header-spi-w5500-eth).
+ * Add with -DEXTRA_DTC_OVERLAY_FILE=...;extras/w5500-eth.overlay
+ * -DEXTRA_CONF_FILE=...;extras/w5500-eth.conf (preset header-spi-w5500-eth).
  */
 
 #include <zephyr/dt-bindings/gpio/gpio.h>

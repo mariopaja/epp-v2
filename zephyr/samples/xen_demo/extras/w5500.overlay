@@ -5,8 +5,8 @@
  * (LPSPI7): SCLK pin 26, MOSI pin 31, MISO pin 29, SCSn pin 35, RSTn pin 37,
  * 3.3 V pin 1, GND pin 6 (INTn not connected: the test polls). Register
  * test only, no Ethernet driver. Add with
- * -DEXTRA_DTC_OVERLAY_FILE=...;w5500.overlay
- * -DEXTRA_CONF_FILE=...;w5500.conf (preset header-spi-w5500).
+ * -DEXTRA_DTC_OVERLAY_FILE=...;extras/w5500.overlay
+ * -DEXTRA_CONF_FILE=...;extras/w5500.conf (preset header-spi-w5500).
  */
 
 #include <zephyr/dt-bindings/gpio/gpio.h>

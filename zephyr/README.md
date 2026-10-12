@@ -396,9 +396,9 @@ U16 (schematic page 18), which connects the pins to the M.2 Wi-Fi slot
 unless "SPI3/GPIO select" of the GPIO expander is high, and Linux in Dom0
 uses LPSPI3 and these pads for the M.2 slot (see `lpuart7`).
 
-`xen_led_i2c_netfront` tests the bus every 10 s: without a device in a
+`xen_demo` tests the bus every 10 s: without a device in a
 loopback test (jumper from MOSI pin 31 to MISO pin 29, no chip select);
-with `w5500.overlay` + `w5500.conf` a WIZnet W5500 Ethernet module (SCLK
+with `extras/w5500.overlay` + `extras/w5500.conf` a WIZnet W5500 Ethernet module (SCLK
 26, MOSI 31, MISO 29, SCSn 35, RSTn 37, INTn not connected): its version,
 PHY state and a MAC address register write and read back:
 
@@ -409,8 +409,8 @@ app: header spi: W5500 version 0x04 OK, link down, MAC write/read OK
 This is a register test with its own compatible (`epp,w5500-test`), so that
 no driver binds to the chip.
 
-**W5500 as a network interface:** with `w5500-eth.overlay` +
-`w5500-eth.conf` (preset `header-spi-w5500-eth`) the node is a real
+**W5500 as a network interface:** with `extras/w5500-eth.overlay` +
+`extras/w5500-eth.conf` (preset `header-spi-w5500-eth`) the node is a real
 `wiznet,w5500` with Zephyr's W5500 Ethernet driver (random MAC address):
 a second network interface next to netfront, with its own Ethernet port and
 DHCP. Its INTn goes to pin 36 (`int-gpios = <&gpio2 16
@@ -481,7 +481,7 @@ app: can (J20): error-active (tx err 0, rx err 0), sent 21, received 1, last 0x1
   (also from bus-off). The application sends with a callback, so it never
   waits for that.
 
-Without wiring: `can-loopback.conf` (preset `can-loopback`) starts FlexCAN2
+Without wiring: `extras/can-loopback.conf` (preset `can-loopback`) starts FlexCAN2
 in loopback mode, where it receives its own frames internally; every 10 s
 the application also sends a request to itself:
 
@@ -512,7 +512,7 @@ while `lpuart7` is passed through:
 The M.2 slot's SPI is unusable meanwhile (the Wi-Fi/BT module uses SDIO and
 LPUART5).
 
-`xen_led_i2c_netfront` tests the UART every 10 s in a loopback (wire from
+`xen_demo` tests the UART every 10 s in a loopback (wire from
 pin 24 to pin 21, which are diagonal, not neighbours): it sends a line at
 115200 baud byte by byte and expects every byte back:
 
@@ -523,7 +523,7 @@ app: header uart (pins 24/21): loopback OK (15 bytes, 115200 baud)
 The binding's `internal-loopback` property loops TX to RX inside the LPUART
 instead (CTRL[LOOPS]), to test the driver without the pin path.
 
-### Drivers and samples
+### Drivers
 
 The upstream NXP drivers need SCMI (clocks), pinctrl and the MCUX SoC
 headers, which a `xenvm` DomU does not have, so this module has minimal
@@ -537,43 +537,75 @@ drivers:
 | `CONFIG_EPP_XEN_FLEXCAN` | FlexCAN, `epp,xen-flexcan`: classic CAN (no CAN FD), standard and extended IDs, remote frames, 8 receive filters (one mailbox each, individual masks), one transmit mailbox, normal, loopback and listen-only mode, state changes; interrupt driven. Start-up and i.MX95 quirks as in Linux's flexcan driver (ECC RAM init, MECR, reserved mailbox 0). Bit timing from the 24 MHz CAN clock (`functional-clock-frequency`) |
 | `CONFIG_EPP_XEN_LPSPI` | LPSPI controller, `epp,xen-lpspi`: controller mode, 8-bit words, full duplex, SPI modes 0-3, MSB or LSB first, polled, chip select by GPIO (`cs-gpios`). SCK = 24 MHz / (2^prescale x (div + 2)), up to 12 MHz |
 
-| Sample | Needs | Does |
-|---|---|---|
-| [xen_led_passthrough](samples/xen_led_passthrough) | `gpio2` | cycles D19 red, green, blue, white, off, one second each |
-| [xen_led_netfront](samples/xen_led_netfront) | `gpio2` | the same, plus netfront with DHCP |
-| [xen_led_i2c_netfront](samples/xen_led_i2c_netfront) | `gpio2`, any option | D19 cycles every second, netfront with DHCP, every 10 s the network state and the test of the I2C bus passed through |
+### The demo application (`samples/xen_demo`)
 
-`xen_led_i2c_netfront` is one image for every option: it reads
-`epp/passthrough` and starts only that bus. Its parts are compiled in with
-Kconfig (its `Kconfig` and `prj.conf`), each in its own `#ifdef` block:
+One Zephyr image for every passthrough selection. The LED D19 on GPIO2
+(always passed through) cycles red, green, blue, white, off; netfront gets
+an address by DHCP. Once Dom0 has booted, the application reads the
+passthrough list from xenstore (`epp/passthrough`) and starts the **parts**
+of the listed devices; every 10 s it prints the network state and every
+part's result. Devices are `zephyr,deferred-init` in `app.overlay`: a part
+starts its device only when it is passed through, so nothing touches a
+device that is not.
 
-| Kconfig | Part | Default |
-|---|---|---|
-| `CONFIG_EPP_LPI2C4` | display bus: scan, IT6263 chip ID, PCA9632 register write and read back | off: follows the `lpi2c4` node in `app.overlay`, `status = "disabled"` (the bus belongs to HDMI). `lpi2c4.overlay` sets it `"okay"` |
-| `CONFIG_EPP_LPI2C5` | header I2C pins 27/28: scan | on (follows the `lpi2c5` node) |
-| `CONFIG_EPP_LPI2C6` | header I2C pins 3/5: scan | on (follows the `lpi2c6` node) |
-| `CONFIG_EPP_LPI2C7` | header I2C pins 31/26: scan | on (follows the `lpi2c7` node) |
-| `CONFIG_EPP_LPSPI7` | header SPI: loopback test | on (follows the `lpspi7` node) |
-| `CONFIG_EPP_W5500` | W5500 register test on the header SPI instead of the loopback test (`w5500.overlay` + `w5500.conf`) | off |
-| `CONFIG_EPP_FLEXCAN2` | CAN2: heartbeat 0x123 every second, frames with ID 0x100 answered on 0x101 with the same data, state every 10 s | on (follows the `flexcan2` node) |
-| `CONFIG_EPP_FLEXCAN2_LOOPBACK` | CAN2 in loopback mode, no wiring (`can-loopback.conf`) | off |
-| `CONFIG_EPP_LPUART7` | header UART: loopback test every 10 s | on (follows the `lpuart7` node) |
-| `CONFIG_EPP_W5500_ETH` | W5500 as second network interface with Zephyr's driver, DHCP (`w5500-eth.overlay` + `w5500-eth.conf`; LPSPI7 starts at boot) | off |
-| `CONFIG_EPP_PCF8574` | PCF8574 module on pins 3/5 (below) | off |
+```
+samples/xen_demo/
+  src/main.c          LED, netfront, passthrough list, runs the parts
+  src/part.h          a part: passthrough option, start(), every_second(), report()
+  src/i2c_scan.c      I2C bus scan, shared by the I2C parts
+  src/i2c_display.c   part lpi2c4
+  src/i2c_header.c    parts lpi2c5, lpi2c6, lpi2c7
+  src/pcf8574.c       PCF8574 on lpi2c6 (extras)
+  src/spi_loopback.c  part lpspi7: loopback test
+  src/w5500_test.c    part lpspi7 with a W5500: register test (extras)
+  src/w5500_eth.c     part lpspi7 with a W5500: network interface (extras)
+  src/can.c           part flexcan2
+  src/uart.c          part lpuart7
+  app.overlay         GPIO2, the LED and all passthrough devices
+  Kconfig, prj.conf   one option per part
+  extras/             overlays and Kconfig fragments of the optional parts
+  dts/bindings/       epp,w5500-test (register test without driver)
+```
 
-When Dom0 passes a bus through that is compiled out, the application says
-so (`app: lpi2c4 is passed through, but CONFIG_EPP_LPI2C4 is off`) and does
-not touch it.
+Each part file defines its parts with `DEMO_PART()` (an iterable section,
+run in name order); `CMakeLists.txt` compiles a file only when its Kconfig
+option is on. When Dom0 passes a device through whose part is not compiled
+in, the application says so (`app: lpi2c4 is passed through, but its part
+is not compiled in (Kconfig)`) and does not touch it.
+
+| Part | Option | Kconfig (default) | Extras (`extras/`) | Every 10 s |
+|---|---|---|---|---|
+| display bus | `lpi2c4` | `CONFIG_EPP_LPI2C4` (off: the `lpi2c4` node is disabled, it belongs to HDMI) | `lpi2c4.overlay` | scan, IT6263 chip ID, PCA9632 register write and read back |
+| header I2C | `lpi2c5`, `lpi2c6`, `lpi2c7` | `CONFIG_EPP_LPI2C5/6/7` (on) | | scan of pins 27/28, 3/5, 31/26 |
+| PCF8574 | `lpi2c6` | `CONFIG_EPP_PCF8574` (off) | `pcf8574.overlay` + `.conf` | P0-P7 walk, steps and errors |
+| header SPI | `lpspi7` | `CONFIG_EPP_LPSPI7` (on) | | loopback, jumper MOSI 31 to MISO 29 |
+| W5500 test | `lpspi7` | `CONFIG_EPP_W5500` (off) | `w5500.overlay` + `.conf` | version, PHY state, MAC write and read back |
+| W5500 Ethernet | `lpspi7` | `CONFIG_EPP_W5500_ETH` (off; LPSPI7 starts at boot) | `w5500-eth.overlay` + `.conf` | network state of the W5500 interface |
+| CAN | `flexcan2` | `CONFIG_EPP_FLEXCAN2` (on), `CONFIG_EPP_FLEXCAN2_LOOPBACK` (off) | `can-loopback.conf` | state, counters, last frame; heartbeat 0x123 every second, 0x100 answered on 0x101 |
+| header UART | `lpuart7` | `CONFIG_EPP_LPUART7` (on) | | loopback, wire TX 24 to RX 21 |
+
+The options that follow a device node are on when the node in
+`app.overlay` is `"okay"`. **Adding a part:** a node for the device in
+`app.overlay` (`zephyr,deferred-init`), a Kconfig option, a file in `src/`
+with `DEMO_PART(pN_<option>, .option = "<option>", .start = ..., .report =
+...)`, and a `target_sources_ifdef()` line in `CMakeLists.txt`.
 
 ```bash
-west build -p -b xenvm/xenvm/gicv3 $HOME/dev/epp-v2/zephyr/samples/xen_led_i2c_netfront -- \
+west build -p -b xenvm/xenvm/gicv3 $HOME/dev/epp-v2/zephyr/samples/xen_demo -- \
     -DEXTRA_ZEPHYR_MODULES=$HOME/dev/epp-v2/zephyr \
     -DEXTRA_DTC_OVERLAY_FILE=$HOME/dev/epp-v2/zephyr/xen/xenvm-dom0less.overlay \
     -DEXTRA_CONF_FILE=$HOME/dev/epp-v2/zephyr/xen/xenvm-dom0less.conf
 ```
 
-Or with the Yocto image in one step, from a preset: `./build-demo.sh
-header-i2c` (see the main [README](../README.md#demo-presets-build-demosh)).
+Extras are added to the two lists, e.g. for the W5500 register test
+`...;$HOME/dev/epp-v2/zephyr/samples/xen_demo/extras/w5500.overlay` and
+`...;.../extras/w5500.conf`. Or with the Yocto image in one step, from a
+preset: `./build-demo.sh header-i2c` (see the main
+[README](../README.md#demo-presets-build-demosh)).
+
+[samples/xen_netfront](samples/xen_netfront) and
+[samples/xen_xenstore](samples/xen_xenstore) are the minimal examples of the
+network frontend and the xenstore client.
 
 Every 10 s, with `lpi2c5`, `lpi2c6` and `lpi2c7` selected (a PCF8574 on
 pins 3/5):
@@ -598,12 +630,10 @@ power cycle until Linux's driver turns it off).
 
 **PCF8574 test:** a PCF8574 I/O expander module (not on the board) on the
 header at 0x20 (A0-A2 to GND; a PCF8574A is at 0x38), driven with Zephyr's
-`nxp,pcf857x` GPIO driver. Build with `pcf8574.overlay` (the `pcf8574` and
-`zephyr,user` nodes) and `pcf8574.conf` (`CONFIG_EPP_PCF8574`) from the
-application directory, added to `EXTRA_DTC_OVERLAY_FILE` / `EXTRA_CONF_FILE`
-(or the preset `header-pcf8574` of `build-demo.sh`).
-Its pins P0-P7 then go high one after the other, then all high, then all
-low, every 500 ms, each step read back:
+`nxp,pcf857x` GPIO driver (`extras/pcf8574.overlay` +
+`extras/pcf8574.conf`, preset `header-pcf8574`). Its pins P0-P7 go high one
+after the other, then all high, then all low, every 500 ms, each step read
+back:
 
 ```
 app: header i2c (J19 pins 3/5): 0x20
@@ -617,13 +647,13 @@ P0-P7 with a meter or logic analyser, or connect LEDs from VCC to the pins
 The Zephyr DomU's output is also in Xen's console log, so it can be read
 from Dom0 without the serial console: `xl dmesg | grep DOM2`.
 
-Tested on hardware: `xen_led_passthrough` and `xen_led_netfront` (LED cycles,
-DHCP and ping from the LAN) with `gpio2`; the display bus test with
+Tested on hardware (before `xen_demo` was split into part files, with the
+same tests): the LED alone and with netfront (LED cycles, DHCP and ping
+from the LAN) with `gpio2`; the display bus test with
 `lpi2c4` (all three devices found, IDs and register readback correct); the
 header I2C with a PCF8574 module (found at 0x20, P0-P7 walk without errors,
 DHCP and ping from the LAN), each while Dom0 and the Linux DomU run.
-Switching with `epp-passthrough` and rebooting, one `xen_led_i2c_netfront`
-image: `lpi2c6` (PCF8574 found, Linux keeps `i2c-3`), `none` (GPIO2 only,
+Switching with `epp-passthrough` and rebooting, one demo image: `lpi2c6` (PCF8574 found, Linux keeps `i2c-3`), `none` (GPIO2 only,
 Linux keeps all buses), `lpi2c4` (Linux loses `i2c-3`; with
 `CONFIG_EPP_LPI2C4` the display bus test passes, without it the bus is left
 alone), `lpi2c5 lpi2c6 lpi2c7` together (all three buses started, PCF8574

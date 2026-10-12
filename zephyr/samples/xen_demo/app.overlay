@@ -30,7 +30,7 @@
 
 	/*
 	 * Display bus: IT6263 HDMI bridge (0x4c, 0x33), PCA9632 (0x62). It
-	 * belongs to HDMI in Linux, so it is disabled here; lpi2c4.overlay
+	 * belongs to HDMI in Linux, so it is disabled here; extras/lpi2c4.overlay
 	 * enables it and with it its test (CONFIG_EPP_LPI2C4 follows this
 	 * status). Then select lpi2c4 with epp-passthrough in Dom0.
 	 */
@@ -63,14 +63,14 @@
 		clock-frequency = <I2C_BITRATE_STANDARD>;
 		zephyr,deferred-init;
 		status = "okay";
-		/* Optional PCF8574 test module: pcf8574.overlay */
+		/* Optional PCF8574 test module: extras/pcf8574.overlay */
 	};
 
 	/*
 	 * SPI of the 40-pin header J19: SCK pin 26, MOSI pin 31, MISO pin 29;
 	 * chip select pin 35 (GPIO2 19, driven by the driver), device reset
 	 * pin 37 (GPIO2 26). Same pins as lpi2c7: never passed through
-	 * together. Optional W5500 test device: w5500.overlay
+	 * together. Optional W5500: extras/w5500.overlay, w5500-eth.overlay
 	 */
 	lpspi7: spi@42710000 {
 		compatible = "epp,xen-lpspi";

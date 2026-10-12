@@ -4,7 +4,7 @@
  * Enable the display bus (LPI2C4) and with it its test (CONFIG_EPP_LPI2C4).
  * The bus belongs to HDMI in Linux: select lpi2c4 with epp-passthrough in
  * Dom0 only when HDMI is not needed. Add with
- * -DEXTRA_DTC_OVERLAY_FILE=...;lpi2c4.overlay (preset display-i2c).
+ * -DEXTRA_DTC_OVERLAY_FILE=...;extras/lpi2c4.overlay (preset display-i2c).
  */
 
 &lpi2c4 {

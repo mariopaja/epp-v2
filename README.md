@@ -172,13 +172,13 @@ SKIP_SYNC=1 ./build-demo.sh led              # without the repo sync
 | `header-pcf8574` | + PCF8574 module at 0x20 on the header, P0-P7 cycled | `lpi2c6` |
 | `display-i2c` | + display bus test (Linux loses HDMI) | `lpi2c4` |
 
-All use the application `zephyr/samples/xen_led_i2c_netfront`. A preset is a
+All use the application `zephyr/samples/xen_demo`. A preset is a
 file `presets/<name>.conf`:
 
 ```bash
 DESCRIPTION="LED + network + PCF8574 module at 0x20 on the header, P0-P7 cycled (lpi2c6)"
-ZEPHYR_APP=xen_led_i2c_netfront              # in zephyr/samples/
-ZEPHYR_EXTRA="pcf8574.overlay pcf8574.conf"  # extra overlays / Kconfig fragments from its directory
+ZEPHYR_APP=xen_demo                          # in zephyr/samples/
+ZEPHYR_EXTRA="extras/pcf8574.overlay extras/pcf8574.conf"  # overlays / Kconfig fragments, relative to the app
 PASSTHROUGH=lpi2c6                           # default next to GPIO2: none, or any of lpi2c4 lpi2c5 lpi2c6 lpi2c7 lpspi7 flexcan2 lpuart7
 EARLY_PINS=""                                # header pins U-Boot sets at boot (EPP_XEN_ZEPHYR_EARLY_PINS)
 ```
