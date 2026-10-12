@@ -16,6 +16,36 @@ Docker.
 | `DISTRO` | `fsl-imx-wayland` |
 | Image | `epp-v2-image` (core-image-minimal + SSH + kernel modules), see [PACKAGES.md](PACKAGES.md) |
 
+## Quick start: Xen demo with a Zephyr DomU
+
+Needs Docker (see [Prerequisites](#prerequisites)) and, for the Zephyr DomU,
+a Zephyr workspace with the Zephyr SDK (`ZEPHYR_WORKSPACE` in `config.sh`,
+default `~/dev/zephyrproject`). The first Yocto build takes long; later
+builds reuse the cache.
+
+```bash
+./docker-build.sh                  # once: the build container
+./build-demo.sh --list             # the demo presets
+./build-demo.sh led --flash        # Zephyr app + Xen image, then write the SD card
+```
+
+Boot the board from the SD card. Xen starts Dom0, the epp-v2 Linux (DomU)
+and Zephyr (DomU, on its own core); the LED D19 cycles colours. Then:
+
+```bash
+ssh root@epp-v2-dom0               # Dom0, password root1234 (board.conf)
+xl list                            # Dom0, epp-v2, zephyr
+xl dmesg | grep DOM2               # Zephyr's output
+epp-passthrough                    # pick devices for Zephyr (I2C, SPI, CAN, UART), then reboot
+ssh root@epp-v2                    # the epp-v2 Linux
+```
+
+The serial console (USB debug port, `/dev/ttyACM0` on the host) shows all
+domains: Ctrl-a three times switches between them (see [Xen](#xen)). What
+can be passed through and how to wire it:
+[docs/xen-passthrough.md](docs/xen-passthrough.md). Something not working:
+[Troubleshooting](#troubleshooting).
+
 ## Layout
 
 ```
@@ -29,12 +59,14 @@ epp-v2/
 ├── flash-sd.sh           # Writes the image to an SD card
 ├── build-demo.sh         # Zephyr DomU app + Xen image from a preset (presets/)
 ├── presets/              # Demo presets: Zephyr app, extras, default passthrough
+├── docs/                 # xen-passthrough.md: devices for the Zephyr DomU, header pins
 ├── images -> yocto-builds/.../deploy/images/...   # created by the build (gitignored)
 ├── yocto-builds/         # BSP sources, build dir, caches (gitignored)
-├── m7/                 # Cortex-M7 firmware for the boot container (EPP_M7_IMAGE)
-├── xen/                # Zephyr image for the Xen dom0less DomU (EPP_XEN_ZEPHYR_IMAGE)
-├── zephyr/             # Zephyr module: board frdm_imx95 (M7 / A55), Xen xenstore +
-│                         # netfront, RGPIO, LPI2C, LPSPI, LPUART, FlexCAN drivers for the Zephyr DomU; see zephyr/README.md
+├── m7/                   # Cortex-M7 firmware for the boot container (EPP_M7_IMAGE)
+├── xen/                  # Zephyr image for the Xen dom0less DomU (EPP_XEN_ZEPHYR_IMAGE)
+├── zephyr/               # Zephyr module: board frdm_imx95 (M7 / A55); for the Zephyr
+│                         # DomU xenstore, netfront and the passthrough drivers, demo
+│                         # samples/xen_demo; see zephyr/README.md
 ├── scripts/
 │   └── yocto-build.sh    # Runs inside the container: repo sync, setup, bitbake
 └── meta-epp-v2/          # Custom Yocto layer
@@ -54,9 +86,9 @@ epp-v2/
         ├── imx-mkimage/                  # imx-boot: depend on epp-v2-m7-firmware
         ├── u-boot/                       # U-Boot: no EFI boot manager, header pins of
         │                                 # EPP_XEN_ZEPHYR_EARLY_PINS in its pinctrl hog
-        ├── epp-v2-overlays/              # device tree overlays (*.dtso), Xen
-        │                                 # Xen passthrough fragments (*-pt.dtsi, *-pins.dtsi)
-        │                                 # (devices: conf/layer.conf)
+        ├── epp-v2-overlays/              # device tree overlays (*.dtso), Xen passthrough
+        │                                 # fragments (*-pt, *-pins, *-dom0.dtsi;
+        │                                 # devices: conf/layer.conf)
         └── epp-v2-bootscript/            # U-Boot boot.scr that applies overlays
 ```
 
@@ -115,14 +147,12 @@ SKIP_SYNC=1 ./docker-run.sh --xen  # rebuild without repo sync
   Pool-0 (credit2) for Dom0 and the Linux DomU. Check in Dom0 with
   `xl cpupool-list` and `xl vcpu-list`.
 - Hardware passthrough to the Zephyr DomU: GPIO2 (RGB LED D19) always, plus
-  any of `lpi2c4` (display I2C bus, Linux loses HDMI) and the I2C buses of
-  the 40-pin header, `lpi2c5` (pins 27/28), `lpi2c6` (pins 3/5) and `lpi2c7`
-  (pins 31/26), its SPI `lpspi7` (pins 26/31/29, chip select 35; not
-  together with `lpi2c7`), its UART `lpuart7` (pin 24 TX, pin 21 RX), and
-  CAN2 `flexcan2` (connector J20, reserved for the Zephyr DomU: off in Linux
-  also without passthrough; Linux keeps CAN5 on J21). Tick them in Dom0 with `epp-passthrough` (menu) and reboot;
-  `EPP_XEN_ZEPHYR_PASSTHROUGH` is only the default. Dom0 sees passed-through devices as `disabled`. See
-  [zephyr/README.md](zephyr/README.md).
+  any combination of I2C (`lpi2c4`: display bus, Linux loses HDMI;
+  `lpi2c5`, `lpi2c6`, `lpi2c7`: 40-pin header), SPI (`lpspi7`), CAN2
+  (`flexcan2`, J20) and UART (`lpuart7`) of the header. Tick them in Dom0
+  with `epp-passthrough` and reboot; `EPP_XEN_ZEPHYR_PASSTHROUGH` is only
+  the default. CAN2 (J20) belongs to the Zephyr DomU in every selection;
+  Linux keeps CAN5 (J21). See [docs/xen-passthrough.md](docs/xen-passthrough.md).
 - Domain names: `boot.scr` passes the dom0less DomUs to Dom0 in Xen's
   numbering order (`epp.domus=linux,zephyr` on the Dom0 command line);
   `epp-v2-dom0less.service` (`/usr/libexec/epp-v2-dom0less-setup`) sets up
@@ -185,7 +215,9 @@ EARLY_PINS=""                                # header pins U-Boot sets at boot (
 ```
 
 The passthrough is only the default: on the board, `epp-passthrough` in Dom0
-switches it (see [zephyr/README.md](zephyr/README.md)).
+switches it (see [docs/xen-passthrough.md](docs/xen-passthrough.md)). The
+Zephyr application, its parts and their output:
+[zephyr/samples/xen_demo](zephyr/samples/xen_demo/README.md).
 
 `--update [host]` is for a board that already runs an image of this version
 and only needs another Zephyr application (a preset with `EARLY_PINS` needs
@@ -282,8 +314,8 @@ sudo bmaptool copy images/epp-v2-sdcard.wic.zst /dev/sdX
 | `EPP_EXTRA_PACKAGES` | empty | Extra packages installed in the image |
 | `EPP_XEN_ZEPHYR_IMAGE` | empty | Zephyr image (raw `zephyr.bin` for `xenvm/xenvm/gicv3`, path inside this repo, e.g. `xen/zephyr.bin`) started as second DomU with `--xen=dom0less`. `EPP_XEN_ZEPHYR_VCPUS` / `EPP_XEN_ZEPHYR_MEM` (MB) set its resources |
 | `EPP_XEN_ZEPHYR_CPU` | `5` | Physical A55 core (1-5) reserved for the Zephyr DomU: own Xen cpupool with the `null` scheduler, so its vCPU always runs on that core and no other domain does. Empty: shared cores (credit2). Core 0 is Xen's boot CPU |
-| `EPP_XEN_ZEPHYR_PASSTHROUGH` | empty | Default passthrough to the Zephyr DomU next to GPIO2 (always), space separated: `lpi2c4` (display I2C bus, Linux loses HDMI), `lpi2c5`, `lpi2c6`, `lpi2c7` (I2C of the 40-pin header, pins 27/28, 3/5, 31/26; no pull-ups on the board), `lpspi7` (SPI of the 40-pin header, not with `lpi2c7`), `flexcan2` (CAN2, connector J20; off in Linux in every combination), `lpuart7` (UART of the 40-pin header, pins 24/21; the M.2 slot's SPI is off meanwhile); empty: GPIO2 only. Switch on the board with `epp-passthrough` in Dom0 |
-| `EPP_XEN_ZEPHYR_EARLY_PINS` | empty | Header pins U-Boot switches at boot for these passthrough devices (`lpi2c5`, `lpi2c6`, `lpi2c7`, `lpspi7`), for Zephyr drivers that access their device at boot (W5500 Ethernet driver: `lpspi7`). Changes U-Boot: flash the whole card. See [zephyr/README.md](zephyr/README.md) |
+| `EPP_XEN_ZEPHYR_PASSTHROUGH` | empty | Default passthrough to the Zephyr DomU next to GPIO2 (always), space separated, from `lpi2c4 lpi2c5 lpi2c6 lpi2c7 lpspi7 flexcan2 lpuart7` (not `lpi2c7` with `lpspi7`); empty: GPIO2 only. Switch on the board with `epp-passthrough` in Dom0. See [docs/xen-passthrough.md](docs/xen-passthrough.md) |
+| `EPP_XEN_ZEPHYR_EARLY_PINS` | empty | Header pins U-Boot switches at boot for these passthrough devices (`lpi2c5`, `lpi2c6`, `lpi2c7`, `lpspi7`), for Zephyr drivers that access their device at boot (W5500 Ethernet driver: `lpspi7`). Changes U-Boot: flash the whole card. See [docs/xen-passthrough.md](docs/xen-passthrough.md#spi-on-the-40-pin-header-lpspi7) |
 | `EPP_M7_IMAGE` | empty | Cortex-M7 firmware (raw `.bin`, path inside this repo, e.g. `m7/zephyr.bin`) packed into the boot container and started by the System Manager at power-on. Empty: NXP's M7 demo. `none`: no M7 image, M7 off. Update only the M7 on a flashed card: `./flash-sd.sh --m7 <file\|none>`. See [zephyr/README.md](zephyr/README.md) |
 
 `scripts/yocto-build.sh` turns these into `conf/auto.conf` in the build
@@ -342,3 +374,19 @@ boot
 ```
 
 or by copying a new `.dtbo` to `/boot/overlays/` on the running board.
+
+## Troubleshooting
+
+| Symptom | Cause, fix |
+|---|---|
+| Build ends with `Killed` or exit code 137 | Out of memory: lower `BB_NUMBER_THREADS`, see [CPU and memory](#cpu-and-memory) |
+| `ssh`: "REMOTE HOST IDENTIFICATION HAS CHANGED" | Every flashed image has new SSH host keys: `ssh-keygen -R epp-v2-dom0` (and `-R <address>`). The address from DHCP can also change after flashing; use the host names |
+| Ctrl-a does not switch the Xen console | `screen`, `picocom` and `minicom` use Ctrl-a themselves: send it with Ctrl-a a. Do not type `R` in the Xen input, it reboots the board |
+| `xl dmesg \| grep DOM2` misses the first lines | Xen's console buffer is small; watch the serial console during boot |
+| Zephyr DomU output stops after boot | It touched a device that is not passed through. Check `epp-passthrough -l`; an image with the W5500 Ethernet driver needs `lpspi7` |
+| An I2C/SPI part fails (`-EIO`) for about 5 s after boot | Dom0 switches the header pins only when its Linux boots. Fine for the demo; drivers that access their device at boot need `EPP_XEN_ZEPHYR_EARLY_PINS` |
+| CAN: "no response (MCR ...)" | CAN2 clock still off from an image before v0.8.8, where Linux owned FlexCAN2: power cycle the board once |
+| CAN: error-passive or bus-off, nothing received | No other node acknowledges: J20 wired to J21, `can0` up in Dom0 at 500 kbit/s |
+| UART loopback fails | The wire goes from pin 24 to pin 21 (diagonal, not neighbours), and `lpuart7` must be selected: only then does Dom0 switch U16 to the header and leave LPSPI3 off |
+| `build-demo.sh --update` and the preset has `EARLY_PINS` | That changes U-Boot: build and flash the whole card once |
+| Board boots NXP's default instead of Xen | `boot.scr` failed (U-Boot falls back); read the U-Boot output on the serial console. `setenv epp_xen no` at the U-Boot prompt skips Xen on purpose |
