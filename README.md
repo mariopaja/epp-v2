@@ -27,6 +27,8 @@ epp-v2/
 ├── docker-build.sh       # Builds the Docker image
 ├── docker-run.sh         # Runs the build (or a shell) in the container
 ├── flash-sd.sh           # Writes the image to an SD card
+├── build-demo.sh         # Zephyr DomU app + Xen image from a preset (presets/)
+├── presets/              # Demo presets: Zephyr app, extras, default passthrough
 ├── images -> yocto-builds/.../deploy/images/...   # created by the build (gitignored)
 ├── yocto-builds/         # BSP sources, build dir, caches (gitignored)
 ├── m7/                 # Cortex-M7 firmware for the boot container (EPP_M7_IMAGE)
@@ -136,6 +138,48 @@ SKIP_SYNC=1 ./docker-run.sh --xen  # rebuild without repo sync
 - Each build writes `images/epp-v2-sdcard.wic.zst`, the SD card image of that
   build, which `flash-sd.sh` flashes. All variants share `images/`, so the
   last build is the one flashed.
+
+### Demo presets (`build-demo.sh`)
+
+`build-demo.sh` builds a complete Xen dom0less demo in one step: the Zephyr
+DomU application on the host (west, in `ZEPHYR_WORKSPACE` from `config.sh`,
+default `~/dev/zephyrproject`, with its `.venv`), copied to `xen/zephyr.bin`,
+then the Yocto image with `./docker-run.sh --xen`. The preset's Zephyr image
+and default passthrough override `board.conf` for that build only.
+
+```bash
+./build-demo.sh --list                       # presets
+./build-demo.sh header-i2c                   # Zephyr + Yocto image
+./build-demo.sh header-i2c --flash           # ... then ./flash-sd.sh
+./build-demo.sh header-pcf8574 --update      # Zephyr only, to a running board
+SKIP_SYNC=1 ./build-demo.sh led              # without the repo sync
+```
+
+| Preset | Zephyr DomU | Default passthrough |
+|---|---|---|
+| `led` | LED D19 + network | none (GPIO2 only) |
+| `header-i2c` | + I2C scan on the 40-pin header | `lpi2c6` |
+| `header-pcf8574` | + PCF8574 module at 0x20 on the header, P0-P7 cycled | `lpi2c6` |
+| `display-i2c` | + display bus test (Linux loses HDMI) | `lpi2c4` |
+
+All use the application `zephyr/samples/xen_led_i2c_netfront`. A preset is a
+file `presets/<name>.conf`:
+
+```bash
+DESCRIPTION="LED + network + PCF8574 module at 0x20 on the header, P0-P7 cycled (lpi2c6)"
+ZEPHYR_APP=xen_led_i2c_netfront              # in zephyr/samples/
+ZEPHYR_EXTRA="pcf8574.overlay pcf8574.conf"  # extra overlays / Kconfig fragments from its directory
+PASSTHROUGH=lpi2c6                           # default next to GPIO2: none, lpi2c4, lpi2c6
+```
+
+The passthrough is only the default: on the board, `epp-passthrough` in Dom0
+switches it (see [zephyr/README.md](zephyr/README.md)).
+
+`--update [host]` is for a board that already runs an image of this version
+and only needs another Zephyr application: it copies the image to the boot
+partition as `zephyr-domu.bin` over SSH (`root@` `EPP_BOARD_HOST`, default
+`epp-v2-dom0`), selects the preset's passthrough with `epp-passthrough` and
+reboots the board.
 
 Rebuild without re-syncing the BSP sources:
 

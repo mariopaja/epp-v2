@@ -364,7 +364,7 @@ Kconfig (its `Kconfig` and `prj.conf`), each in its own `#ifdef` block:
 
 | Kconfig | Part | Default |
 |---|---|---|
-| `CONFIG_EPP_LPI2C4` | display bus: scan, IT6263 chip ID, PCA9632 register write and read back | off: follows the `lpi2c4` node in `app.overlay`, `status = "disabled"` (the bus belongs to HDMI). Set it `"okay"` to compile it in |
+| `CONFIG_EPP_LPI2C4` | display bus: scan, IT6263 chip ID, PCA9632 register write and read back | off: follows the `lpi2c4` node in `app.overlay`, `status = "disabled"` (the bus belongs to HDMI). `lpi2c4.overlay` sets it `"okay"` |
 | `CONFIG_EPP_LPI2C6` | header I2C: scan | on (follows the `lpi2c6` node) |
 | `CONFIG_EPP_PCF8574` | PCF8574 module on the header (below) | off |
 
@@ -378,6 +378,9 @@ west build -p -b xenvm/xenvm/gicv3 $HOME/dev/epp-v2/zephyr/samples/xen_led_i2c_n
     -DEXTRA_DTC_OVERLAY_FILE=$HOME/dev/epp-v2/zephyr/xen/xenvm-dom0less.overlay \
     -DEXTRA_CONF_FILE=$HOME/dev/epp-v2/zephyr/xen/xenvm-dom0less.conf
 ```
+
+Or with the Yocto image in one step, from a preset: `./build-demo.sh
+header-i2c` (see the main [README](../README.md#demo-presets-build-demosh)).
 
 Every 10 s, with `lpi2c6` selected:
 
@@ -399,8 +402,10 @@ power cycle until Linux's driver turns it off).
 
 **PCF8574 test:** a PCF8574 I/O expander module (not on the board) on the
 header at 0x20 (A0-A2 to GND; a PCF8574A is at 0x38), driven with Zephyr's
-`nxp,pcf857x` GPIO driver. Uncomment the `pcf8574` node and the
-`zephyr,user` node in `app.overlay` and `CONFIG_EPP_PCF8574` in `prj.conf`.
+`nxp,pcf857x` GPIO driver. Build with `pcf8574.overlay` (the `pcf8574` and
+`zephyr,user` nodes) and `pcf8574.conf` (`CONFIG_EPP_PCF8574`) from the
+application directory, added to `EXTRA_DTC_OVERLAY_FILE` / `EXTRA_CONF_FILE`
+(or the preset `header-pcf8574` of `build-demo.sh`).
 Its pins P0-P7 then go high one after the other, then all high, then all
 low, every 500 ms, each step read back:
 
