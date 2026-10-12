@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  NXP FlexCAN controller passed through by Xen to a Zephyr DomU. Pin mux and
+  clock are set up outside the DomU (System Manager, Dom0), so there are no
+  pinctrl or clocks properties. Classic CAN, mailboxes, interrupt driven
+  (the controller's interrupt routed by Xen).
+
+compatible: "epp,xen-flexcan"
+
+include: [can-controller.yaml, base.yaml]
+
+properties:
+  reg:
+    required: true
+
+  interrupts:
+    required: true
+
+  functional-clock-frequency:
+    type: int
+    default: 24000000
+    description: |
+      FlexCAN protocol engine clock in Hz (CAN clock root of the controller,
+      CTRL1[CLKSRC] = 0), as set by the System Manager (Linux in Dom0:
+      /sys/kernel/debug/clk/canN/clk_rate). Default of an unused CAN root:
+      24 MHz; Linux sets 40 MHz while it owns the controller.

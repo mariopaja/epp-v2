@@ -78,4 +78,14 @@ config EPP_XEN_LPSPI
 	  System Manager and Dom0 set those up. 8-bit words, full duplex,
 	  polled, chip select by GPIO (cs-gpios).
 
+config EPP_XEN_FLEXCAN
+	bool "NXP FlexCAN passed through to a Xen DomU"
+	default y
+	depends on CAN && DT_HAS_EPP_XEN_FLEXCAN_ENABLED
+	help
+	  Minimal FlexCAN driver for a controller Xen passes through to the
+	  DomU together with its interrupt (compatible "epp,xen-flexcan"): no
+	  SCMI and no pinctrl. Classic CAN, 8 receive filters (one mailbox
+	  each), one transmit mailbox.
+
 endmenu
