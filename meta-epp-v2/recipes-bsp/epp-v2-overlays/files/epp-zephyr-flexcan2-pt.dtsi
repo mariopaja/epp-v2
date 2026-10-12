@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Xen passthrough fragment "flexcan2": FlexCAN2 with the CAN2 transceiver
+ * (TJA1051, connector J20: CANH, CANL, GND), TX GPIO_IO25, RX GPIO_IO27.
+ * Registers mapped 1:1, its interrupt (GIC SPI 38) routed to the DomU under
+ * the same number (interrupt-parent 0xfde8: Xen's guest GIC). No DMA. Linux
+ * keeps FlexCAN5 (J21). Part of the /passthrough node of
+ * epp-zephyr-pt-<combination>.dts.
+ */
+
+can@425b0000 {
+	compatible = "fsl,imx95-flexcan";
+	reg = <0x0 0x425b0000 0x0 0x10000>;
+	interrupt-parent = <0xfde8>;
+	interrupts = <0x0 38 0x4>;	/* GIC_SPI 38, level high */
+	xen,path = "/soc/bus@42000000/can@425b0000";
+	xen,reg = <0x0 0x425b0000 0x0 0x10000 0x0 0x425b0000>;
+	xen,force-assign-without-iommu;
+};

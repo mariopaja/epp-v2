@@ -1,0 +1,13 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Dom0 fragment "flexcan2": the CAN transceivers' standby line (CAN_STBY,
+ * GPIO expander line 7) is shared by CAN1, CAN2 and CAN5. Linux switches it
+ * on only while one of its own CAN interfaces is up, so with FlexCAN2 in
+ * the Zephyr DomU keep it on from boot. Part of
+ * epp-zephyr-pt-pins-<combination>.dtso (top level, next to the pin mux).
+ */
+
+&reg_can_stby {
+	regulator-always-on;
+	regulator-boot-on;
+};

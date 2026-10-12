@@ -12,12 +12,16 @@ COMPATIBLE_MACHINE = "imx95-15x15-lpddr4x-frdm"
 
 # Passthrough devices (layer.conf): one fragment pair per device,
 # epp-zephyr-<name>-pt.dtsi (node for the partial device tree) and
-# epp-zephyr-<name>-pins.dtsi (pin group for the pinctrl hog)
+# epp-zephyr-<name>-pins.dtsi (pin group for the pinctrl hog), optionally
+# epp-zephyr-<name>-dom0.dtsi (other changes to Dom0's device tree, at the
+# top level of the pin mux overlay)
 EPP_PT_DEVICES = "${EPP_XEN_ZEPHYR_PT_FIXED} ${EPP_XEN_ZEPHYR_PT_OPTIONS}"
+EPP_PT_DOM0_FRAGMENTS = "${@' '.join(n for n in d.getVar('EPP_PT_DEVICES').split() if os.path.exists(os.path.join(d.getVar('THISDIR'), 'files', 'epp-zephyr-%s-dom0.dtsi' % n)))}"
 
 SRC_URI = " \
     file://epp-example.dtso \
     ${@' '.join('file://epp-zephyr-%s-pt.dtsi file://epp-zephyr-%s-pins.dtsi' % (n, n) for n in d.getVar('EPP_PT_DEVICES').split())} \
+    ${@' '.join('file://epp-zephyr-%s-dom0.dtsi' % n for n in d.getVar('EPP_PT_DOM0_FRAGMENTS').split())} \
 "
 
 # Sources to compile: the overlays from files/ plus the generated files
@@ -81,6 +85,12 @@ HDR
 HDR
         for n in $devs; do cat ${S}/epp-zephyr-$n-pins.dtsi >> $out; done
         printf '};\n' >> $out
+        for n in $devs; do
+            if [ -f ${S}/epp-zephyr-$n-dom0.dtsi ]; then
+                printf '\n' >> $out
+                cat ${S}/epp-zephyr-$n-dom0.dtsi >> $out
+            fi
+        done
     done
 }
 

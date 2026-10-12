@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Pin mux fragment "flexcan2": GPIO_IO25 (CAN2_TX) and GPIO_IO27 (CAN2_RX),
+ * as in pinctrl_flexcan2 of imx95-15x15-frdm.dts. They reach the
+ * transceiver through the board's switch U19 while "CAN2&5/GPIO select" is
+ * low (gpio-hog in the FRDM device tree, set by Dom0). Part of
+ * epp-zephyr-pt-pins-<combination>.dtso (SCMI pinctrl hog, set once when
+ * Dom0 boots).
+ */
+
+pinctrl_epp_flexcan2: eppflexcan2grp {
+	fsl,pins = <
+		IMX95_PAD_GPIO_IO25__CAN2_TX		0x39e
+		IMX95_PAD_GPIO_IO27__CAN2_RX		0x39e
+	>;
+};

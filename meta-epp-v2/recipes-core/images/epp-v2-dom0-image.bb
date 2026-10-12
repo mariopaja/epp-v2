@@ -14,6 +14,8 @@ IMAGE_INSTALL:append = " \
     kernel-image \
     xen-tools \
     epp-v2-xen-dom0 \
+    iproute2 \
+    can-utils \
 "
 
 # boot | Dom0 rootfs | DomU rootfs (epp-v2-image)
