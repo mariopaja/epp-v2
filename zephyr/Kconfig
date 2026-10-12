@@ -55,7 +55,8 @@ config EPP_XEN_RGPIO
 	help
 	  Minimal driver for an RGPIO controller Xen passes through to the DomU
 	  (compatible "epp,xen-rgpio"): no SCMI and no pinctrl, the System
-	  Manager and Dom0 set those up. No interrupts.
+	  Manager and Dom0 set those up. Pin interrupts when the node has an
+	  interrupt (routed by Xen).
 
 config EPP_XEN_LPI2C
 	bool "NXP LPI2C passed through to a Xen DomU"

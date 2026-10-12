@@ -3,7 +3,9 @@
 description: |
   NXP RGPIO controller passed through by Xen to a Zephyr DomU (xenvm). Pin
   mux and clocks are set up outside the DomU (System Manager, Dom0), so the
-  driver needs neither SCMI nor pinctrl. No interrupts.
+  driver needs neither SCMI nor pinctrl. Pin interrupts (edges, levels)
+  when the node has "interrupts" (the GPIO interrupt routed by Xen, e.g.
+  GIC SPI 49 for GPIO2).
 
 compatible: "epp,xen-rgpio"
 
