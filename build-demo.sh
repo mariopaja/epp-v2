@@ -50,10 +50,13 @@ DESCRIPTION="" ZEPHYR_APP="" ZEPHYR_EXTRA="" PASSTHROUGH=none
 source "${PRESET_DIR}/${PRESET}.conf"
 APP_DIR="${EPP_DIR}/zephyr/samples/${ZEPHYR_APP}"
 [ -d "${APP_DIR}" ] || die "Zephyr application not found: ${APP_DIR}"
-case "${PASSTHROUGH}" in
-    none|lpi2c4|lpi2c6) ;;
-    *) die "${PRESET}: PASSTHROUGH must be none, lpi2c4 or lpi2c6 (got '${PASSTHROUGH}')" ;;
-esac
+[ -n "${PASSTHROUGH}" ] || PASSTHROUGH=none
+for pt in ${PASSTHROUGH}; do
+    case "${pt}" in
+        none|lpi2c4|lpi2c5|lpi2c6|lpi2c7) ;;
+        *) die "${PRESET}: PASSTHROUGH: unknown device '${pt}' (none, lpi2c4, lpi2c5, lpi2c6, lpi2c7)" ;;
+    esac
+done
 
 echo "Preset:      ${PRESET}: ${DESCRIPTION}"
 echo "Zephyr app:  ${ZEPHYR_APP}${ZEPHYR_EXTRA:+ + ${ZEPHYR_EXTRA}}"
