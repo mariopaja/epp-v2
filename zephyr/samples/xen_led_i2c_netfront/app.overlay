@@ -12,12 +12,15 @@
  */
 
 #include <zephyr/dt-bindings/gpio/gpio.h>
+#include <zephyr/dt-bindings/interrupt-controller/arm-gic.h>
 #include <zephyr/dt-bindings/i2c/i2c.h>
 
 / {
 	gpio2: gpio@43810000 {
 		compatible = "epp,xen-rgpio";
 		reg = <0x00 0x43810000 0x00 0x1000>;
+		/* Routed by Xen (partial device tree), same number as on the host */
+		interrupts = <GIC_SPI 49 IRQ_TYPE_LEVEL IRQ_DEFAULT_PRIORITY>;
 		gpio-controller;
 		#gpio-cells = <2>;
 		ngpios = <32>;

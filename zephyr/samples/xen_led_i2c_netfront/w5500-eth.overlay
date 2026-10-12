@@ -2,8 +2,9 @@
  * SPDX-License-Identifier: Apache-2.0
  *
  * WIZnet W5500 Ethernet module on the header SPI (LPSPI7) as a second
- * network interface of the Zephyr DomU, with Zephyr's W5500 Ethernet driver
- * (polling mode: INTn not connected). Wiring as in w5500.overlay.
+ * network interface of the Zephyr DomU, with Zephyr's W5500 Ethernet driver.
+ * Wiring as in w5500.overlay, plus INTn on pin 36 (GPIO_IO16, GPIO2 16): the
+ * driver waits for its interrupt instead of polling.
  *
  * Zephyr's network stack and this driver access the chip at boot, so here
  * LPSPI7 starts at boot as well (not deferred): the image needs lpspi7
@@ -23,6 +24,7 @@
 		reg = <0>;
 		spi-max-frequency = <12000000>;
 		reset-gpios = <&gpio2 26 GPIO_ACTIVE_LOW>;
+		int-gpios = <&gpio2 16 GPIO_ACTIVE_LOW>;
 		zephyr,random-mac-address;
 	};
 };
